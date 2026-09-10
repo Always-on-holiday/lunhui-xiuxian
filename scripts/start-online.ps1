@@ -33,9 +33,9 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host ""
 Write-Host "正在启动本地世界并建立临时联机通道……"
 Write-Host ""
-Write-Host "游戏准备好后，会自动使用默认浏览器打开。" -ForegroundColor Green
+Write-Host "公网地址生成后，会自动使用默认浏览器打开。" -ForegroundColor Green
 Write-Host "成功后，窗口会显示一个以 trycloudflare.com 结尾的网址。" -ForegroundColor Yellow
-Write-Host "把完整网址发给朋友；你自己的页面无需复制网址。" -ForegroundColor Yellow
+Write-Host "该网址也会自动复制；直接粘贴发给朋友即可。" -ForegroundColor Yellow
 Write-Host "第一次若询问是否下载 cloudflared，请输入 y 后回车。"
 Write-Host ""
 Write-Host "这个窗口必须保持开启；想停止联机时按 Ctrl+C。"
@@ -55,38 +55,43 @@ $arguments = @(
     "--tunnel"
 )
 
-$localGameUrl = "http://127.0.0.1:8787"
-$browserJob = Start-Job -ScriptBlock {
-    param($gameUrl)
-
-    for ($attempt = 0; $attempt -lt 120; $attempt++) {
-        try {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri $gameUrl -TimeoutSec 2
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
-                Start-Process $gameUrl
-                return
-            }
-        }
-        catch {
-            # The local server is still starting.
-        }
-
-        Start-Sleep -Milliseconds 500
-    }
-} -ArgumentList $localGameUrl
+$tunnelOpened = $false
 
 try {
-    & $nodePath @arguments
+    & $nodePath @arguments 2>&1 | ForEach-Object {
+        $line = $_.ToString()
+        Write-Host $line
+
+        if (-not $tunnelOpened) {
+            $urlMatch = [regex]::Match($line, "https://[a-z0-9-]+\.trycloudflare\.com/?", "IgnoreCase")
+            if ($urlMatch.Success) {
+                $publicGameUrl = $urlMatch.Value.TrimEnd("/") + "/"
+
+                try {
+                    Set-Clipboard -Value $publicGameUrl
+                }
+                catch {
+                    Write-Host "未能自动复制网址，请从上方绿色文字中复制。" -ForegroundColor Yellow
+                }
+
+                try {
+                    Start-Process $publicGameUrl
+                    Write-Host "已打开公网游戏页面，并复制邀请网址。" -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "未能自动打开浏览器，请打开：$publicGameUrl" -ForegroundColor Yellow
+                }
+
+                $tunnelOpened = $true
+            }
+        }
+    }
     $exitCode = $LASTEXITCODE
 }
 catch {
     Write-Host ""
     Write-Host "启动失败：$($_.Exception.Message)" -ForegroundColor Red
     $exitCode = 1
-}
-finally {
-    Stop-Job -Job $browserJob -ErrorAction SilentlyContinue
-    Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
