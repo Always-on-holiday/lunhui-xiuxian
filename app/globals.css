@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+
+:root {
+  --background: #07100e;
+  --foreground: #eef1e7;
+  --card: #0b1714;
+  --card-foreground: #eef1e7;
+  --popover: #0b1714;
+  --popover-foreground: #eef1e7;
+  --primary: #d6b66d;
+  --primary-foreground: #142019;
+  --secondary: #14241f;
+  --secondary-foreground: #e8ede3;
+  --muted: #10201b;
+  --muted-foreground: #96a69e;
+  --accent: #17352c;
+  --accent-foreground: #f5e7bd;
+  --destructive: #b94d46;
+  --border: #29443a;
+  --input: #29443a;
+  --ring: #d6b66d;
+  --radius: 0.35rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #07100e;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--foreground);
+  background:
+    radial-gradient(circle at 16% 8%, rgba(46, 106, 83, 0.2), transparent 33rem),
+    radial-gradient(circle at 86% 88%, rgba(150, 72, 52, 0.12), transparent 28rem),
+    #07100e;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", ui-serif, serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.world-grid {
+  background-image:
+    linear-gradient(rgba(222, 203, 145, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(222, 203, 145, 0.035) 1px, transparent 1px);
+  background-size: 38px 38px;
+}
+
+.ink-panel {
+  background:
+    linear-gradient(145deg, rgba(17, 35, 29, 0.96), rgba(7, 16, 14, 0.92));
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.32),
+    inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.gold-rule {
+  background: linear-gradient(90deg, transparent, rgba(214, 182, 109, 0.85), transparent);
+}
+
+.seal {
+  border: 1px solid rgba(194, 79, 62, 0.82);
+  color: #e99580;
+  box-shadow: inset 0 0 0 2px rgba(194, 79, 62, 0.12);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .slow-pulse {
+    animation: slow-pulse 3.2s ease-in-out infinite;
+  }
+}
+
+@keyframes slow-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
