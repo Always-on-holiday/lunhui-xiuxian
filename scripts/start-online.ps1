@@ -25,6 +25,54 @@ if (-not (Test-Path -LiteralPath $wranglerPath) -or -not (Test-Path -LiteralPath
     exit 1
 }
 
+function Wait-ForPublicGame {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+
+    $hostName = ([uri]$Url).DnsSafeHost
+    $dnsQueryUrl = "https://cloudflare-dns.com/dns-query?name=$([uri]::EscapeDataString($hostName))&type=A"
+    $dnsHeaders = @{ Accept = "application/dns-json" }
+    $dnsReady = $false
+
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        try {
+            $dnsResult = Invoke-RestMethod -Uri $dnsQueryUrl -Headers $dnsHeaders -TimeoutSec 5
+            $addressRecords = @($dnsResult.Answer | Where-Object { $_.type -eq 1 -or $_.type -eq 28 })
+            if ($dnsResult.Status -eq 0 -and $addressRecords.Count -gt 0) {
+                $dnsReady = $true
+                break
+            }
+        }
+        catch {
+            # The temporary hostname is still being registered.
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    if (-not $dnsReady) {
+        return $false
+    }
+
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 5
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                return $true
+            }
+        }
+        catch {
+            # DNS is ready, but the tunnel may still need a moment.
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    return $false
+}
+
 Set-Location -LiteralPath $projectDir
 Clear-Host
 Write-Host "==================================================" -ForegroundColor DarkGreen
@@ -74,12 +122,18 @@ try {
                     Write-Host "未能自动复制网址，请从上方绿色文字中复制。" -ForegroundColor Yellow
                 }
 
-                try {
-                    Start-Process $publicGameUrl
-                    Write-Host "已打开公网游戏页面，并复制邀请网址。" -ForegroundColor Green
+                Write-Host "公网通道已生成，正在等待它真正可访问……" -ForegroundColor Yellow
+                if (Wait-ForPublicGame -Url $publicGameUrl) {
+                    try {
+                        Start-Process $publicGameUrl
+                        Write-Host "公网游戏页面已经就绪并自动打开。" -ForegroundColor Green
+                    }
+                    catch {
+                        Write-Host "未能自动打开浏览器，请打开：$publicGameUrl" -ForegroundColor Yellow
+                    }
                 }
-                catch {
-                    Write-Host "未能自动打开浏览器，请打开：$publicGameUrl" -ForegroundColor Yellow
+                else {
+                    Write-Host "公网地址暂时未就绪，请关闭窗口后重新启动。" -ForegroundColor Red
                 }
 
                 $tunnelOpened = $true
