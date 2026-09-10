@@ -33,8 +33,9 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host ""
 Write-Host "正在启动本地世界并建立临时联机通道……"
 Write-Host ""
+Write-Host "游戏准备好后，会自动使用默认浏览器打开。" -ForegroundColor Green
 Write-Host "成功后，窗口会显示一个以 trycloudflare.com 结尾的网址。" -ForegroundColor Yellow
-Write-Host "把完整网址发给朋友，你自己也用同一个网址进入游戏。" -ForegroundColor Yellow
+Write-Host "把完整网址发给朋友；你自己的页面无需复制网址。" -ForegroundColor Yellow
 Write-Host "第一次若询问是否下载 cloudflared，请输入 y 后回车。"
 Write-Host ""
 Write-Host "这个窗口必须保持开启；想停止联机时按 Ctrl+C。"
@@ -54,6 +55,26 @@ $arguments = @(
     "--tunnel"
 )
 
+$localGameUrl = "http://127.0.0.1:8787"
+$browserJob = Start-Job -ScriptBlock {
+    param($gameUrl)
+
+    for ($attempt = 0; $attempt -lt 120; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $gameUrl -TimeoutSec 2
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                Start-Process $gameUrl
+                return
+            }
+        }
+        catch {
+            # The local server is still starting.
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+} -ArgumentList $localGameUrl
+
 try {
     & $nodePath @arguments
     $exitCode = $LASTEXITCODE
@@ -62,6 +83,10 @@ catch {
     Write-Host ""
     Write-Host "启动失败：$($_.Exception.Message)" -ForegroundColor Red
     $exitCode = 1
+}
+finally {
+    Stop-Job -Job $browserJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
