@@ -2,6 +2,8 @@
 
 一个以文字选择、自动战斗、随机事件和死亡转生为核心的网页修仙肉鸽原型。
 
+所属组织：[Always-on-holiday](https://github.com/Always-on-holiday)
+
 ## 当前原型
 
 - 最多四名玩家通过同一房间码进入同一个世界
