@@ -17,12 +17,42 @@ if (-not (Test-Path -LiteralPath $nodePath)) {
 
 $wranglerPath = Join-Path $projectDir "node_modules\wrangler\bin\wrangler.js"
 $configPath = Join-Path $projectDir "dist\server\wrangler.json"
+$saveConfigPath = Join-Path $projectDir "wrangler.save.json"
+$projectRoot = Split-Path -Parent $projectDir
+$saveRoot = Join-Path $projectRoot "世界存档"
+$activeWorldPath = Join-Path $saveRoot "默认世界"
+$legacyStatePath = Join-Path $projectDir ".wrangler\state"
 
-if (-not (Test-Path -LiteralPath $wranglerPath) -or -not (Test-Path -LiteralPath $configPath)) {
+if (
+    -not (Test-Path -LiteralPath $wranglerPath) -or
+    -not (Test-Path -LiteralPath $configPath) -or
+    -not (Test-Path -LiteralPath $saveConfigPath)
+) {
     Write-Host "没有找到完整的游戏文件。" -ForegroundColor Red
     Write-Host "请保留启动器和“网页原型”文件夹原来的位置。"
     Read-Host "按回车关闭"
     exit 1
+}
+
+$existingServer = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
+if ($existingServer) {
+    Write-Host "已有一个游戏服务器正在运行。" -ForegroundColor Yellow
+    Write-Host "请使用已经打开的游戏页面，或先关闭旧的黑色窗口。"
+    Read-Host "按回车关闭"
+    exit 1
+}
+
+New-Item -ItemType Directory -Force -Path $saveRoot | Out-Null
+$legacySaveImported = $false
+
+if (-not (Test-Path -LiteralPath $activeWorldPath)) {
+    if (Test-Path -LiteralPath $legacyStatePath) {
+        Copy-Item -LiteralPath $legacyStatePath -Destination $activeWorldPath -Recurse -Force
+        $legacySaveImported = $true
+    }
+    else {
+        New-Item -ItemType Directory -Force -Path $activeWorldPath | Out-Null
+    }
 }
 
 function Wait-ForPublicGame {
@@ -86,9 +116,49 @@ Write-Host "成功后，窗口会显示一个以 trycloudflare.com 结尾的网�
 Write-Host "该网址也会自动复制；直接粘贴发给朋友即可。" -ForegroundColor Yellow
 Write-Host "第一次若询问是否下载 cloudflared，请输入 y 后回车。"
 Write-Host ""
+Write-Host "世界会自动保存到：" -ForegroundColor Green
+Write-Host $activeWorldPath -ForegroundColor Green
+Write-Host ""
 Write-Host "这个窗口必须保持开启；想停止联机时按 Ctrl+C。"
 Write-Host "关闭后，临时网址会立即失效，下次启动会生成新网址。"
 Write-Host "==================================================" -ForegroundColor DarkGreen
+Write-Host ""
+
+if ($legacySaveImported) {
+    Write-Host "正在把旧测试世界迁入新的存档目录……"
+    $bootstrapSql = "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); INSERT OR IGNORE INTO d1_migrations(name) VALUES ('0000_ordinary_selene.sql');"
+    & $nodePath $wranglerPath d1 execute DB --config $saveConfigPath --local --persist-to $activeWorldPath --command $bootstrapSql --yes
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "旧存档迁移失败，请把这个窗口截图发给我。" -ForegroundColor Red
+        Read-Host "按回车关闭"
+        exit 1
+    }
+}
+
+Write-Host "正在载入世界存档……"
+$hadCiValue = Test-Path Env:CI
+$previousCiValue = $env:CI
+try {
+    $env:CI = "true"
+    & $nodePath $wranglerPath d1 migrations apply DB --config $saveConfigPath --local --persist-to $activeWorldPath
+    $migrationExitCode = $LASTEXITCODE
+}
+finally {
+    if ($hadCiValue) {
+        $env:CI = $previousCiValue
+    }
+    else {
+        Remove-Item Env:CI -ErrorAction SilentlyContinue
+    }
+}
+
+if ($migrationExitCode -ne 0) {
+    Write-Host "世界存档读取失败，请把这个窗口截图发给我。" -ForegroundColor Red
+    Read-Host "按回车关闭"
+    exit 1
+}
+
+Write-Host "世界存档已载入，正在开启联机……" -ForegroundColor Green
 Write-Host ""
 
 $arguments = @(
@@ -97,7 +167,7 @@ $arguments = @(
     "dev",
     "--config", "dist/server/wrangler.json",
     "--local",
-    "--persist-to", ".wrangler/state",
+    "--persist-to", $activeWorldPath,
     "--ip", "127.0.0.1",
     "--inspector-port", "0",
     "--tunnel"
