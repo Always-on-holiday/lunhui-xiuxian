@@ -1,14 +1,17 @@
 @echo off
 setlocal
 
-set "CONTENT_DIR="
-if exist "%~dp0public\游戏内容\界面文字.json" set "CONTENT_DIR=%~dp0public\游戏内容"
-if not defined CONTENT_DIR for /d %%D in ("%~dp0*") do if exist "%%~fD\public\游戏内容\界面文字.json" set "CONTENT_DIR=%%~fD\public\游戏内容"
+set "PWSH=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe"
+if not exist "%PWSH%" set "PWSH=powershell.exe"
 
-if not defined CONTENT_DIR (
-  echo Could not find the game content folder.
+set "OPENER="
+if exist "%~dp0scripts\open-content.ps1" set "OPENER=%~dp0scripts\open-content.ps1"
+if not defined OPENER for /d %%D in ("%~dp0*") do if exist "%%~fD\scripts\open-content.ps1" set "OPENER=%%~fD\scripts\open-content.ps1"
+
+if not defined OPENER (
+  echo Could not find the content opener.
   pause
   exit /b 1
 )
 
-start "" explorer.exe "%CONTENT_DIR%"
+"%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%OPENER%" %*
