@@ -1,0 +1,460 @@
+{
+  "metadata": {
+    "title": "修行战斗规则公式规范",
+    "version": "1.0",
+    "language": "zh-CN",
+    "purpose": "供规则引擎、角色生成器和战斗结算程序生成代码",
+    "paired_document": "修行战斗规则-v1.0.md"
+  },
+  "conventions": {
+    "dice_notation": {
+      "d100": "uniform_integer(1, 100)",
+      "d20": "uniform_integer(1, 20)"
+    },
+    "rounding": {
+      "floor": "向下取整",
+      "ceil": "向上取整",
+      "rounding_order": "除非公式另有说明，只在该公式的最终结果处取整"
+    },
+    "percentage_comparison": "roll <= target 表示成功，但大失败规则优先",
+    "minimum_damage": 0,
+    "minimum_effective_skill": 0,
+    "maximum_roll_target": 99
+  },
+  "enums": {
+    "attributes": [
+      "strength",
+      "constitution",
+      "dexterity",
+      "intelligence",
+      "willpower",
+      "spiritual_perception",
+      "charisma"
+    ],
+    "realms": [
+      {"index": 1, "name": "锻体", "level_min": 1, "level_max": 10},
+      {"index": 2, "name": "练气", "level_min": 11, "level_max": 20},
+      {"index": 3, "name": "筑基", "level_min": 21, "level_max": 30},
+      {"index": 4, "name": "结丹", "level_min": 31, "level_max": 40},
+      {"index": 5, "name": "元婴", "level_min": 41, "level_max": 50},
+      {"index": 6, "name": "化神", "level_min": 51, "level_max": 60},
+      {"index": 7, "name": "炼虚", "level_min": 61, "level_max": 70},
+      {"index": 8, "name": "合体", "level_min": 71, "level_max": 80},
+      {"index": 9, "name": "大乘", "level_min": 81, "level_max": 90},
+      {"index": 10, "name": "渡劫", "level_min": 91, "level_max": 100}
+    ],
+    "difficulty": {
+      "very_easy": 2.0,
+      "easy": 1.5,
+      "standard": 1.0,
+      "hard": 0.67,
+      "formidable": 0.5,
+      "miraculous": 0.1,
+      "impossible": null
+    },
+    "internal_result_rank_low_to_high": [
+      "catastrophic_mishap",
+      "severe_mishap",
+      "clear_failure",
+      "near_failure",
+      "normal_success",
+      "advantageous_success",
+      "excellent_success",
+      "perfect_success"
+    ],
+    "final_result_rank_low_to_high": [
+      "major_failure",
+      "failure",
+      "success",
+      "major_success"
+    ]
+  },
+  "character_formulas": {
+    "realm_index": {
+      "formula": "floor((level - 1) / 10) + 1",
+      "constraints": "level in [1, 100]"
+    },
+    "realm_phase": {
+      "formula": "local_level = ((level - 1) % 10) + 1; 1..3=初期, 4..6=中期, 7..9=后期, 10=圆满"
+    },
+    "max_health": {
+      "formula": "20 + constitution * 2 + floor(level / 2)"
+    },
+    "max_spirit": {
+      "formula": "10 + spiritual_perception * 2 + willpower + level"
+    },
+    "initiative": {
+      "formula": "dexterity + spiritual_perception"
+    },
+    "carry_capacity": {
+      "formula": "strength * 5"
+    },
+    "permanent_skill": {
+      "formula": "attribute_a + attribute_b + training + background_bonus + talent_bonus + permanent_growth",
+      "cap": null,
+      "note": "技能允许超过100"
+    },
+    "skill_points_per_level": {
+      "formula": "5"
+    }
+  },
+  "spiritual_root_multipliers": {
+    "mixed": 0.8,
+    "four_roots": 0.9,
+    "three_roots": 1.0,
+    "dual_roots": 1.15,
+    "single_root": 1.3,
+    "heavenly_or_special_body": 1.5
+  },
+  "cultivation_formulas": {
+    "technique_experience": {
+      "formula": "floor(base_experience * root_multiplier * mentor_multiplier * environment_multiplier)"
+    },
+    "technique_damage_multiplier": {
+      "formula": "1 + technique_level / 200",
+      "constraints": "technique_level in [0, 100]",
+      "range": [1.0, 1.5],
+      "application": "同一次攻击默认只应用一个主要功法乘区"
+    }
+  },
+  "skill_check": {
+    "inputs": {
+      "S": "永久技能值，整数，可超过100",
+      "difficulty_multiplier": "难度倍率",
+      "augmenting_skill": "辅助技能值；无辅助时为0",
+      "flat_modifier": "装备、伤势、环境等固定修正",
+      "roll": "1d100"
+    },
+    "derived_values": {
+      "E": {
+        "name": "难度技能值",
+        "formula": "ceil(S * difficulty_multiplier)"
+      },
+      "A": {
+        "name": "辅助技能加值",
+        "formula": "floor(augmenting_skill / 5)"
+      },
+      "T_raw": {
+        "name": "未经上限处理的目标值",
+        "formula": "E + A + flat_modifier"
+      },
+      "T": {
+        "name": "最终目标值",
+        "formula": "if S < 100 and T_raw > 100 then 95 else min(99, max(0, T_raw))",
+        "note": "临时突破100不等于永久超百；如不采用95上限，可将本式替换为 min(99,max(0,T_raw))"
+      },
+      "C": {
+        "name": "大成功上界",
+        "formula": "min(T, 99, ceil(E / 10))",
+        "note": "辅助技能与固定加值不扩大大成功范围"
+      },
+      "P": {
+        "name": "天成上界",
+        "formula": "min(C, ceil(C / 2))"
+      },
+      "H": {
+        "name": "优势成功上界",
+        "formula": "min(T, 99, max(C, ceil(E / 2)))"
+      },
+      "margin": {
+        "name": "成功差值",
+        "formula": "T - roll"
+      }
+    },
+    "fumble_priority": [
+      {
+        "condition": "roll == 100",
+        "internal_result": "catastrophic_mishap",
+        "final_result": "major_failure"
+      },
+      {
+        "condition": "roll == 99 and S <= 100",
+        "internal_result": "severe_mishap",
+        "final_result": "major_failure"
+      }
+    ],
+    "ordered_resolution": [
+      {
+        "condition": "roll == 100",
+        "internal_result": "catastrophic_mishap"
+      },
+      {
+        "condition": "roll == 99 and S <= 100",
+        "internal_result": "severe_mishap"
+      },
+      {
+        "condition": "T > 0 and roll <= P",
+        "internal_result": "perfect_success"
+      },
+      {
+        "condition": "T > 0 and roll <= C",
+        "internal_result": "excellent_success"
+      },
+      {
+        "condition": "T > 0 and roll <= H",
+        "internal_result": "advantageous_success"
+      },
+      {
+        "condition": "T > 0 and roll <= T",
+        "internal_result": "normal_success"
+      },
+      {
+        "condition": "roll - T <= 10",
+        "internal_result": "near_failure"
+      },
+      {
+        "condition": "otherwise",
+        "internal_result": "clear_failure"
+      }
+    ],
+    "final_mapping": {
+      "perfect_success": "major_success",
+      "excellent_success": "major_success",
+      "advantageous_success": "success",
+      "normal_success": "success",
+      "near_failure": "failure",
+      "clear_failure": "failure",
+      "severe_mishap": "major_failure",
+      "catastrophic_mishap": "major_failure"
+    },
+    "reference_pseudocode": [
+      "function resolveSkillCheck(S, difficultyMultiplier, augmentingSkill, flatModifier, roll):",
+      "  E = ceil(S * difficultyMultiplier)",
+      "  A = floor(augmentingSkill / 5)",
+      "  Traw = E + A + flatModifier",
+      "  T = (S < 100 and Traw > 100) ? 95 : min(99, max(0, Traw))",
+      "  C = min(T, 99, ceil(E / 10))",
+      "  P = min(C, ceil(C / 2))",
+      "  H = min(T, 99, max(C, ceil(E / 2)))",
+      "  if roll == 100: internal = catastrophic_mishap",
+      "  else if roll == 99 and S <= 100: internal = severe_mishap",
+      "  else if T > 0 and roll <= P: internal = perfect_success",
+      "  else if T > 0 and roll <= C: internal = excellent_success",
+      "  else if T > 0 and roll <= H: internal = advantageous_success",
+      "  else if T > 0 and roll <= T: internal = normal_success",
+      "  else if roll - T <= 10: internal = near_failure",
+      "  else: internal = clear_failure",
+      "  final = finalMapping[internal]",
+      "  return {S,E,A,Traw,T,C,P,H,roll,margin:T-roll,internal,final}"
+    ]
+  },
+  "opposed_check": {
+    "normalization": {
+      "effective_pre_normalization": "N_raw_i = ceil(S_i * difficulty_multiplier_i) + floor(augmenting_skill_i / 5) + flat_modifier_i",
+      "excess": "X = max(0, max(N_raw_i for all participants) - 100)",
+      "normalized_effective": "N_i = max(0, N_raw_i - X)",
+      "target": "T_i = min(99, N_i)",
+      "quality_thresholds": "对抗检定中以N_i替代E计算C、P、H；99/100大失败仍按永久技能S_i判定"
+    },
+    "comparison_order": [
+      "final_result_rank descending",
+      "internal_result_rank descending",
+      "margin = T_i - roll_i descending",
+      "permanent_skill S_i descending",
+      "tie"
+    ],
+    "reference_pseudocode": [
+      "function normalizeOpposed(participants):",
+      "  for p in participants: p.Nraw = ceil(p.S * p.difficultyMultiplier) + floor(p.augmentingSkill / 5) + p.flatModifier",
+      "  X = max(0, max(p.Nraw) - 100)",
+      "  for p in participants: p.N = max(0, p.Nraw - X)",
+      "  resolve each participant using N for thresholds and original S for fumble rules",
+      "  sort by final rank, internal rank, margin, original S",
+      "  return highest or tie"
+    ]
+  },
+  "combat": {
+    "success_multipliers": {
+      "major_success": 1.5,
+      "success": 1.0,
+      "failure": 0.0,
+      "major_failure": 0.0
+    },
+    "hit_quality": {
+      "normal_hit": "攻击者赢得对抗，但不满足重击条件",
+      "heavy_hit": "攻击者最终结果等级至少高出防御者2级，或攻击者大成功且防御者为失败/大失败",
+      "defensive_opportunity": "防御者最终结果等级至少高出攻击者2级"
+    },
+    "raw_power": {
+      "formula": "base_power + floor(relevant_attribute / 3) + equipment_bonus + technique_bonus"
+    },
+    "damage": {
+      "multiplied_damage": "floor(raw_power * success_multiplier * technique_multiplier * realm_multiplier * environment_multiplier * random_multiplier)",
+      "after_defense": "max(0, multiplied_damage - armor - block)",
+      "final_damage": "max(0, after_defense + weakness_bonus - resistance_bonus)",
+      "order": [
+        "raw_power",
+        "success_multiplier",
+        "technique_multiplier",
+        "realm_multiplier",
+        "environment_multiplier",
+        "random_multiplier",
+        "floor",
+        "armor_and_block",
+        "weakness_and_resistance",
+        "minimum_zero"
+      ]
+    },
+    "random_multiplier_by_d20": [
+      {"roll_min": 1, "roll_max": 4, "multiplier": 0.9},
+      {"roll_min": 5, "roll_max": 8, "multiplier": 0.95},
+      {"roll_min": 9, "roll_max": 12, "multiplier": 1.0},
+      {"roll_min": 13, "roll_max": 16, "multiplier": 1.05},
+      {"roll_min": 17, "roll_max": 20, "multiplier": 1.1}
+    ],
+    "realm_multiplier": {
+      "formula": "clamp(1 + 0.15 * realm_difference, 0.50, 1.75)",
+      "realm_difference": "attacker_realm_index - defender_realm_index",
+      "canonical_values": {
+        "-2": 0.7,
+        "-1": 0.85,
+        "0": 1.0,
+        "1": 1.15,
+        "2": 1.3
+      }
+    }
+  },
+  "injury_and_death": {
+    "light_injury_trigger": "single_damage >= max_health * 0.10",
+    "heavy_injury_trigger": "single_damage >= max_health * 0.35 or current_health <= max_health * 0.30",
+    "incapacitated_trigger": "current_health <= 0",
+    "automatic_death_trigger": "current_health <= -max_health * 0.50",
+    "default_modifiers": {
+      "light_injury_related_actions": -5,
+      "heavy_injury_related_actions": -15
+    },
+    "dying_check": {
+      "skill": "endurance",
+      "major_success": "stable and regain consciousness if fiction permits",
+      "success": "stable",
+      "failure": "add 1 dying failure",
+      "major_failure": "add 2 dying failures",
+      "death": "dying_failures >= 3"
+    },
+    "cultivation_damage_default": {
+      "light": "temporary technique_level penalty 5..10",
+      "severe": "possible permanent character level or realm loss",
+      "allowed_triggers": [
+        "targeted meridian attack",
+        "targeted dantian attack",
+        "targeted nascent soul attack",
+        "targeted soul attack",
+        "major failure on dying check",
+        "failed forced breakthrough",
+        "cultivation-burning forbidden technique",
+        "foundation drain"
+      ]
+    }
+  },
+  "equipment_durability": {
+    "normal_range": [1, 20],
+    "durability_loss_default": 1,
+    "loss_triggers": [
+      "block a heavy hit",
+      "major failure on block",
+      "receive armor_breaking attack",
+      "corrosion or extreme environment"
+    ],
+    "half_durability_effect": "equipment_bonus -= 1",
+    "zero_durability_effect": "equipment disabled or broken"
+  },
+  "battle_outcome": {
+    "priority_order": [
+      "death",
+      "captured",
+      "escaped",
+      "mutual_incapacitation",
+      "victory_quality"
+    ],
+    "victory_quality": {
+      "complete_victory": "winner_health_ratio > 0.75 and no_new_heavy_injury and no_important_equipment_broken and no_cultivation_damage",
+      "costly_victory": "winner_health_ratio <= 0.40 or new_heavy_injury or important_equipment_broken or cultivation_damage",
+      "victory": "otherwise"
+    },
+    "capture": "loser unconscious, surrendered, or controlled; winner chooses not to kill",
+    "escape": "loser wins escape/pursuit resolution and leaves encounter",
+    "mutual_incapacitation": "all opposing sides unable to continue"
+  },
+  "test_vectors": [
+    {
+      "id": "skill_standard_70",
+      "input": {"S": 70, "difficulty_multiplier": 1.0, "augmenting_skill": 0, "flat_modifier": 0},
+      "expected_thresholds": {"E": 70, "A": 0, "T": 70, "P": 4, "C": 7, "H": 35},
+      "expected_ranges": {
+        "perfect_success": "1..4",
+        "excellent_success": "5..7",
+        "advantageous_success": "8..35",
+        "normal_success": "36..70",
+        "near_failure": "71..80",
+        "clear_failure": "81..98",
+        "severe_mishap": "99",
+        "catastrophic_mishap": "100"
+      }
+    },
+    {
+      "id": "skill_augmented_60_by_50",
+      "input": {"S": 60, "difficulty_multiplier": 1.0, "augmenting_skill": 50, "flat_modifier": 0},
+      "expected_thresholds": {"E": 60, "A": 10, "T": 70, "P": 3, "C": 6, "H": 30},
+      "note": "辅助增加普通成功范围，但大成功与优势成功质量线按主技能计算"
+    },
+    {
+      "id": "skill_true_over_100",
+      "input": {"S": 130, "difficulty_multiplier": 1.0, "augmenting_skill": 0, "flat_modifier": 0},
+      "expected_thresholds": {"E": 130, "T": 99, "P": 7, "C": 13, "H": 65},
+      "expected_ranges": {
+        "perfect_success": "1..7",
+        "excellent_success": "8..13",
+        "advantageous_success": "14..65",
+        "normal_success": "66..99",
+        "catastrophic_mishap": "100"
+      }
+    },
+    {
+      "id": "skill_130_formidable",
+      "input": {"S": 130, "difficulty_multiplier": 0.5, "augmenting_skill": 0, "flat_modifier": 0},
+      "expected_thresholds": {"E": 65, "T": 65, "P": 4, "C": 7, "H": 33},
+      "expected_ranges": {
+        "perfect_success": "1..4",
+        "excellent_success": "5..7",
+        "advantageous_success": "8..33",
+        "normal_success": "34..65",
+        "near_failure": "66..75",
+        "clear_failure": "76..99",
+        "catastrophic_mishap": "100"
+      }
+    },
+    {
+      "id": "opposed_160_vs_110",
+      "input": [
+        {"S": 160, "difficulty_multiplier": 1.0, "augmenting_skill": 0, "flat_modifier": 0},
+        {"S": 110, "difficulty_multiplier": 1.0, "augmenting_skill": 0, "flat_modifier": 0}
+      ],
+      "expected": {"excess": 60, "normalized_targets": [100, 50]}
+    },
+    {
+      "id": "snow_valley_fire_sword_damage",
+      "input": {
+        "base_power": 9,
+        "relevant_attribute": 9,
+        "equipment_bonus": 3,
+        "technique_bonus": 6,
+        "success_multiplier": 1.5,
+        "technique_multiplier": 1.29,
+        "realm_multiplier": 1.0,
+        "environment_multiplier": 0.9,
+        "random_multiplier": 1.05,
+        "armor": 2,
+        "block": 0,
+        "weakness_bonus": 5,
+        "resistance_bonus": 0
+      },
+      "expected": {
+        "raw_power": 21,
+        "multiplied_damage_before_floor": 38.400075,
+        "multiplied_damage": 38,
+        "after_defense": 36,
+        "final_damage": 41
+      }
+    }
+  ]
+}
