@@ -94,7 +94,13 @@ export default function Home() {
         if (!response.ok) throw new Error("内容配置读取失败");
         return response.json();
       })
-      .then((value: unknown) => setContent(mergeContent(value)))
+      .then((value: unknown) => {
+        const nextContent = mergeContent(value);
+        setContent(nextContent);
+        document.title = nextContent.meta.title;
+        const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+        if (description) description.content = nextContent.meta.description;
+      })
       .catch(() => undefined);
   }, []);
 
