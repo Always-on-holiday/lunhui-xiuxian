@@ -17,15 +17,19 @@ if (-not (Test-Path -LiteralPath $nodePath)) {
 
 $wranglerPath = Join-Path $projectDir "node_modules\wrangler\bin\wrangler.js"
 $configPath = Join-Path $projectDir "dist\server\wrangler.json"
+$builtWorkerPath = Join-Path $projectDir "dist\server\index.js"
+$frameworkScriptPath = Join-Path $projectDir "scripts\run-framework.mjs"
 $saveConfigPath = Join-Path $projectDir "wrangler.save.json"
 $projectRoot = Split-Path -Parent $projectDir
 $saveRoot = Join-Path $projectRoot "世界存档"
 $activeWorldPath = Join-Path $saveRoot "默认世界"
 $legacyStatePath = Join-Path $projectDir ".wrangler\state"
+$contentSourcePath = Join-Path $projectDir "public\游戏内容"
+$contentTargetPath = Join-Path $projectDir "dist\client\游戏内容"
 
 if (
     -not (Test-Path -LiteralPath $wranglerPath) -or
-    -not (Test-Path -LiteralPath $configPath) -or
+    -not (Test-Path -LiteralPath $frameworkScriptPath) -or
     -not (Test-Path -LiteralPath $saveConfigPath)
 ) {
     Write-Host "没有找到完整的游戏文件。" -ForegroundColor Red
@@ -40,6 +44,42 @@ if ($existingServer) {
     Write-Host "请使用已经打开的游戏页面，或先关闭旧的黑色窗口。"
     Read-Host "按回车关闭"
     exit 1
+}
+
+$buildInputs = @(
+    (Join-Path $projectDir "app"),
+    (Join-Path $projectDir "db"),
+    (Join-Path $projectDir "next.config.ts"),
+    (Join-Path $projectDir "vite.config.ts"),
+    (Join-Path $projectDir "package.json"),
+    (Join-Path $projectDir "pnpm-lock.yaml")
+)
+$latestSourceChange = $buildInputs |
+    Where-Object { Test-Path -LiteralPath $_ } |
+    ForEach-Object {
+        if ((Get-Item -LiteralPath $_).PSIsContainer) {
+            Get-ChildItem -LiteralPath $_ -Recurse -File
+        }
+        else {
+            Get-Item -LiteralPath $_
+        }
+    } |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 1
+
+$needsBuild = -not (Test-Path -LiteralPath $configPath) -or
+    -not (Test-Path -LiteralPath $builtWorkerPath) -or
+    ($latestSourceChange -and $latestSourceChange.LastWriteTimeUtc -gt (Get-Item -LiteralPath $builtWorkerPath -ErrorAction SilentlyContinue).LastWriteTimeUtc)
+
+if ($needsBuild) {
+    Write-Host "检测到网页程序有更新，正在自动构建……" -ForegroundColor Yellow
+    & $nodePath $frameworkScriptPath build
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $configPath)) {
+        Write-Host "网页更新失败，请把这个窗口截图发给我。" -ForegroundColor Red
+        Read-Host "按回车关闭"
+        exit 1
+    }
+    Write-Host "网页程序已更新。" -ForegroundColor Green
 }
 
 New-Item -ItemType Directory -Force -Path $saveRoot | Out-Null
@@ -156,6 +196,12 @@ if ($migrationExitCode -ne 0) {
     Write-Host "世界存档读取失败，请把这个窗口截图发给我。" -ForegroundColor Red
     Read-Host "按回车关闭"
     exit 1
+}
+
+if (Test-Path -LiteralPath $contentSourcePath) {
+    New-Item -ItemType Directory -Force -Path $contentTargetPath | Out-Null
+    Copy-Item -Path (Join-Path $contentSourcePath "*") -Destination $contentTargetPath -Recurse -Force
+    Write-Host "游戏文字已更新。" -ForegroundColor Green
 }
 
 Write-Host "世界存档已载入，正在开启联机……" -ForegroundColor Green

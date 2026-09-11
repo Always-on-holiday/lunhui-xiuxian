@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import content from "@/public/游戏内容/界面文字.json";
 
 export const metadata: Metadata = {
-  title: "轮回仙途｜联机测试境",
-  description: "四人共享世界的网页文字修仙联机原型。",
+  title: content.meta.title,
+  description: content.meta.description,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

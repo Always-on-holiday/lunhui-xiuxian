@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "title": "轮回仙途｜联机测试境",
+    "description": "四人共享世界的网页文字修仙联机原型。"
+  },
+  "brand": {
+    "seal": "轮",
+    "name": "轮回仙途",
+    "subtitle": "联机测试境",
+    "serviceStatus": "世界服务运行中"
+  },
+  "landing": {
+    "eyebrow": "四人共享 · 世界持续运行",
+    "titleLead": "同入一界，",
+    "titleAccent": "各走一生。",
+    "description": "创建一个世界，把六位房间码发给好友。最多四名玩家可以进入同一片天地，见证彼此的轮回。",
+    "highlights": [
+      { "value": "四人", "label": "同界" },
+      { "value": "死亡", "label": "转生" },
+      { "value": "永生", "label": "终局" }
+    ],
+    "createTab": "开辟世界",
+    "joinTab": "加入世界",
+    "nameLabel": "你的道号",
+    "createNamePlaceholder": "例如：听潮客",
+    "joinNamePlaceholder": "例如：守山人",
+    "pvpLabel": "允许玩家斗法",
+    "pvpDescription": "关闭时，玩家只能合作与交易。",
+    "createButton": "生成房间码",
+    "createBusy": "正在开辟…",
+    "roomCodeLabel": "六位房间码",
+    "roomCodePlaceholder": "例如：Q7M2KR",
+    "joinButton": "凭房间码进入",
+    "joinBusy": "正在入世…",
+    "privacyNotice": "公开测试原型，请勿填写真实姓名或隐私信息。"
+  },
+  "world": {
+    "leaveButton": "离开此界",
+    "roomLabel": "世界编号",
+    "inviteShort": "邀请",
+    "copiedShort": "已复制",
+    "calendarLabel": "世界历",
+    "dayPrefix": "第 ",
+    "daySuffix": " 日",
+    "pvpLabel": "斗法规则",
+    "pvpPrefix": "PVP ",
+    "pvpEnabled": "开启",
+    "pvpDisabled": "关闭",
+    "location": "青冥洲 · 无名渡",
+    "heading": "诸位的第一世已经开始",
+    "storyParagraphs": [
+      "天色未明，渡口的铜铃无风自响。四方灵气正在汇入此界，世界时间已经开始流动。",
+      "目前开放的是联机房间原型：好友使用同一房间码进入后，会出现在右侧同界修士名录中。"
+    ],
+    "noticeTitle": "天道告示",
+    "noticeText": "修炼、奇遇、自动战斗和死亡转生将在下一阶段接入。此版本先验证四人进入同一世界。",
+    "playersTitle": "同界修士",
+    "hostRole": "界主",
+    "playerRole": "游方修士",
+    "currentPlayer": "你",
+    "emptySlot": "等待有缘人",
+    "copyInvite": "复制邀请链接",
+    "copiedInvite": "邀请链接已复制"
+  }
+}
