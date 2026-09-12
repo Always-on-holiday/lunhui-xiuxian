@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "title": "随机事件阶段列表",
-    "status": "第一阶段配置与事件内容就绪，等待事件引擎接入"
+    "status": "第一阶段配置、内容与事件引擎已接入"
   },
   "interface": {
     "mode": "single_page_scene",

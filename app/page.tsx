@@ -6,6 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EventScene } from "@/components/event-scene";
+import {
+  continueVillageAdventure,
+  isEventEngineConfig,
+  isEventLibraryConfig,
+  resolveEventChoice,
+  startVillageAdventure,
+  toggleEventItem,
+  type EventEngineConfig,
+  type EventLibraryConfig,
+} from "@/lib/events";
 import {
   canTriggerSideQuest,
   chooseTraining,
@@ -21,6 +32,8 @@ import {
 } from "@/lib/prologue";
 import defaultContent from "@/public/游戏内容/界面文字.json";
 import defaultPrologueConfig from "@/public/游戏内容/序章规则.json";
+import defaultEventConfig from "@/public/游戏内容/随机事件/01-新手村.json";
+import defaultEventEngineConfig from "@/public/游戏内容/随机事件/阶段列表.json";
 
 type Player = {
   id: string;
@@ -103,6 +116,8 @@ async function readJson(response: Response) {
 export default function Home() {
   const [content, setContent] = useState<UiContent>(defaultContent);
   const [prologueConfig, setPrologueConfig] = useState<PrologueConfig>(defaultPrologueConfig as PrologueConfig);
+  const [eventConfig, setEventConfig] = useState<EventLibraryConfig>(defaultEventConfig as unknown as EventLibraryConfig);
+  const [eventEngineConfig, setEventEngineConfig] = useState<EventEngineConfig>(defaultEventEngineConfig as unknown as EventEngineConfig);
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [pvpEnabled, setPvpEnabled] = useState(false);
@@ -141,6 +156,22 @@ export default function Home() {
         if (isPrologueConfig(value)) setPrologueConfig(value);
       })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([
+      fetch(`/游戏内容/随机事件/01-新手村.json?v=${Date.now()}`, { cache: "no-store" }).then((response) => {
+        if (!response.ok) throw new Error("新手村事件读取失败");
+        return response.json();
+      }),
+      fetch(`/游戏内容/随机事件/阶段列表.json?v=${Date.now()}`, { cache: "no-store" }).then((response) => {
+        if (!response.ok) throw new Error("事件引擎规则读取失败");
+        return response.json();
+      }),
+    ]).then(([library, engine]: unknown[]) => {
+      if (isEventLibraryConfig(library)) setEventConfig(library);
+      if (isEventEngineConfig(engine)) setEventEngineConfig(engine);
+    }).catch(() => undefined);
   }, []);
 
   const enterSession = useCallback((next: Session) => {
@@ -349,6 +380,14 @@ export default function Home() {
     setLife(next);
   }, [session]);
 
+  useEffect(() => {
+    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure) return;
+    const timer = window.setTimeout(() => {
+      persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [eventConfig, eventEngineConfig, life, persistLife]);
+
   function beginLife() {
     persistLife(rollBirth(prologueConfig));
   }
@@ -381,7 +420,33 @@ export default function Home() {
   function startTrial() {
     if (!life?.training) return;
     setItemNotice("");
-    persistLife(resolveWoodenTrial(life, prologueConfig.trial));
+    const resolved = resolveWoodenTrial(life, prologueConfig.trial);
+    persistLife(resolved.battle?.outcome === "defeat"
+      ? resolved
+      : startVillageAdventure(resolved, eventConfig, eventEngineConfig));
+  }
+
+  function prepareEventItem(itemId: string) {
+    if (!life?.adventure) return;
+    const item = life.inventory?.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    const selected = life.adventure.selectedItemIds.includes(itemId);
+    persistLife(toggleEventItem(life, itemId));
+    setItemNotice(selected
+      ? `已收回「${item.name}」。`
+      : `已备好「${item.name}」，结算时会自动判断是否有用。`);
+  }
+
+  function chooseEvent(choiceId: string) {
+    if (!life?.adventure) return;
+    setItemNotice("");
+    persistLife(resolveEventChoice(life, eventConfig, choiceId, eventEngineConfig));
+  }
+
+  function continueEvent() {
+    if (!life?.adventure) return;
+    setItemNotice("");
+    persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
   function restartLife() {
@@ -452,7 +517,7 @@ export default function Home() {
                 <div>
                   <p className="text-sm tracking-[0.2em] text-[#7ea28f]">{content.world.location}</p>
                   <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">
-                    {life ? "这一世，从出生开始" : "命数未定，静候降生"}
+                    {life?.adventure ? `${life.adventure.stageName} · 当前事件` : life ? "这一世，从出生开始" : "命数未定，静候降生"}
                   </h1>
                 </div>
                 {life ? (
@@ -479,6 +544,13 @@ export default function Home() {
                     {prologueConfig.intro.rollButton}
                   </Button>
                 </div>
+              ) : life.adventure ? (
+                <EventScene
+                  life={life}
+                  config={eventConfig}
+                  onChoose={chooseEvent}
+                  onContinue={continueEvent}
+                />
               ) : (
                 <div className="space-y-6">
                   <div>
@@ -643,8 +715,16 @@ export default function Home() {
                       {(life.inventory ?? []).some((item) => item.quantity > 0) ? (
                         <div className="space-y-3">
                           {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
-                            const selected = life.selectedTrialItemIds?.includes(item.id) ?? false;
-                            const mayPrepare = Boolean(life.training && (!life.battle || life.battle.outcome === "defeat"));
+                            const eventPreparing = Boolean(
+                              life.adventure?.currentEventId
+                                && !life.adventure.lastResolution
+                                && !life.adventure.stageComplete,
+                            );
+                            const selected = eventPreparing
+                              ? life.adventure?.selectedItemIds.includes(item.id) ?? false
+                              : life.selectedTrialItemIds?.includes(item.id) ?? false;
+                            const mayPrepare = eventPreparing
+                              || Boolean(!life.adventure && life.training && (!life.battle || life.battle.outcome === "defeat"));
                             return (
                               <div key={item.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
                                 <div className="flex items-start justify-between gap-3">
@@ -656,7 +736,7 @@ export default function Home() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => prepareTrialItem(item.id)}
+                                      onClick={() => eventPreparing ? prepareEventItem(item.id) : prepareTrialItem(item.id)}
                                       className={selected
                                         ? "border-[#b99a56] bg-[#3b321c] text-[#f0d78f] hover:bg-[#4a3e22]"
                                         : "border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"}
@@ -669,7 +749,11 @@ export default function Home() {
                               </div>
                             );
                           })}
-                          <p className="text-xs leading-5 text-[#70837a]">{prologueConfig.character.itemUseHint}</p>
+                          <p className="text-xs leading-5 text-[#70837a]">
+                            {life.adventure
+                              ? "可为当前事件备好任意数量的道具；结算时仅消耗真正生效的消耗品。"
+                              : prologueConfig.character.itemUseHint}
+                          </p>
                           {itemNotice && <p className="rounded border border-[#5e4d31] bg-[#201b10] px-3 py-2 text-sm text-[#ddc486]">{itemNotice}</p>}
                         </div>
                       ) : (
@@ -708,11 +792,59 @@ export default function Home() {
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
                     <Swords className="h-5 w-5" />
-                    {prologueConfig.trial.windowTitle}
+                    {life?.adventure ? "事件判定" : prologueConfig.trial.windowTitle}
                   </h2>
-                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">{prologueConfig.trial.windowBadge}</span>
+                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">
+                    {life?.adventure ? "即时结算" : prologueConfig.trial.windowBadge}
+                  </span>
                 </div>
-                {life?.battle ? (
+                {life?.adventure ? (
+                  life.adventure.lastResolution ? (
+                    <div className="mt-4">
+                      {life.adventure.lastResolution.calculation ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
+                            <span className="text-[#93a59b]">{life.adventure.lastResolution.calculation.statLabel}</span>
+                            <span className="text-[#d8dfda]">{life.adventure.lastResolution.calculation.statValue}</span>
+                          </div>
+                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
+                            <span className="text-[#93a59b]">功法 / 技法 / 特性</span>
+                            <span className="text-[#d8dfda]">
+                              +{life.adventure.lastResolution.calculation.cultivationBonus
+                                + life.adventure.lastResolution.calculation.techniqueBonus
+                                + life.adventure.lastResolution.calculation.modifierBonus}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
+                            <span className="text-[#93a59b]">道具 / 随机</span>
+                            <span className="text-[#d8dfda]">
+                              +{life.adventure.lastResolution.calculation.itemBonus} / +{life.adventure.lastResolution.calculation.randomRoll}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#3f594c] bg-[#10211b] px-3 py-2 text-sm">
+                            <span className="text-[#b6c4bc]">最终比较</span>
+                            <span className={life.adventure.lastResolution.calculation.margin >= 0 ? "text-[#8fc9aa]" : "text-[#d58b79]"}>
+                              {life.adventure.lastResolution.calculation.total} : {life.adventure.lastResolution.calculation.difficulty}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="rounded border border-[#253b32] bg-[#08120f] px-3 py-3 text-sm text-[#93a59b]">此选项无需判定，直接结算。</p>
+                      )}
+                      <div className="mt-4 rounded-md border border-[#486a58] bg-[#10241c] p-4">
+                        <p className="text-lg text-[#f1dfaa]">{life.adventure.lastResolution.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.adventure.lastResolution.resultText}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">
+                      <p className="text-sm text-[#71847a]">等待你的选择</p>
+                      <p className="mt-2 text-xs leading-5 text-[#566b61]">
+                        选择后只在这里展示关键加成与最终比较，不展开冗长战斗日志。
+                      </p>
+                    </div>
+                  )
+                ) : life?.battle ? (
                   <div className="mt-4">
                     <div className="space-y-2">
                       {life.battle.comparisons.map((item) => (

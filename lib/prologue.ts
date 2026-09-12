@@ -1,3 +1,5 @@
+import type { AdventureState } from "@/lib/events";
+
 export type StatKey = "attack" | "defense" | "speed" | "intelligence" | "proficiency";
 
 export type FiveStats = Record<StatKey, number>;
@@ -80,7 +82,8 @@ export type ItemEffect = {
   message: string;
   battleBonus?: Partial<Record<TrialComparisonKey, number>>;
   bonusWins?: number;
-  forceOutcome?: BattleReport["outcome"];
+  forceOutcome?: string;
+  checkBonus?: number;
   specialResult?: string;
 };
 
@@ -244,6 +247,7 @@ export type PrologueLife = {
   sideQuestTriggered: boolean;
   training?: TrainingChoice;
   battle?: BattleReport;
+  adventure?: AdventureState;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
@@ -512,7 +516,9 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
       itemBonus[key] = (itemBonus[key] ?? 0) + (effect.battleBonus?.[key] ?? 0);
     });
     bonusWins += effect.bonusWins ?? 0;
-    if (effect.forceOutcome) forcedOutcomes.push(effect.forceOutcome);
+    if (effect.forceOutcome === "victory" || effect.forceOutcome === "close" || effect.forceOutcome === "defeat") {
+      forcedOutcomes.push(effect.forceOutcome);
+    }
   });
   const initiative = life.stats.speed
     + Math.floor(life.stats.intelligence / 2)
