@@ -21,6 +21,7 @@ export type TrainingChoice = {
   description: string;
   risk: string;
   gains: Partial<FiveStats>;
+  timeCostDays: number;
 };
 
 export type SpiritualRoot = {
@@ -39,6 +40,28 @@ export type Quest = {
   summary: string;
   unlock?: { stat: StatKey; minimum: number } | null;
   bonus?: Partial<FiveStats>;
+  timeCostDays?: number;
+};
+
+export type WorldLocation = {
+  id: string;
+  name: string;
+  description: string;
+  type: "town" | "wild";
+  x: number;
+  y: number;
+};
+
+export type WorldEvent = {
+  id: string;
+  title: string;
+  startDay: number;
+  endDay?: number | null;
+  mode: "direct" | "storyteller";
+  summary: string;
+  detail: string;
+  storytellerTownId?: string;
+  timeCostDays?: number;
 };
 
 export type BattleComparison = {
@@ -147,6 +170,7 @@ type TrialRules = {
   outcomes: Record<BattleReport["outcome"], Pick<BattleReport, "title" | "summary" | "reward">>;
   defeatBonus: Partial<FiveStats>;
   successLevel: number;
+  timeCostDays: number;
 };
 
 export type PrologueConfig = {
@@ -218,6 +242,26 @@ export type PrologueConfig = {
       status: string;
     }>;
   };
+  worldSystem: {
+    clock: {
+      realSecondsPerWorldDay: number;
+      explanation: string;
+    };
+    lifespan: {
+      startingAgeDays: number;
+      baseDays: number;
+      daysPerDefense: number;
+      realmBonusDays: Record<string, number>;
+    };
+    travel: {
+      footPowerDivisor: number;
+      restDays: number;
+      storytellerDays: number;
+      startingLocationId: string;
+    };
+    locations: WorldLocation[];
+    events: WorldEvent[];
+  };
 };
 
 export type PrologueLife = {
@@ -244,6 +288,11 @@ export type PrologueLife = {
   sideQuestTriggered: boolean;
   training?: TrainingChoice;
   battle?: BattleReport;
+  bornWorldDay?: number;
+  startingAgeDays?: number;
+  lifespanDays?: number;
+  locationId?: string;
+  revealedWorldEventIds?: string[];
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
@@ -356,11 +405,14 @@ export function isPrologueConfig(value: unknown): value is PrologueConfig {
       && candidate.trial
       && candidate.trial.comparisons
       && candidate.trial.outcomes
-      && candidate.worldRules,
+      && candidate.worldRules
+      && candidate.worldSystem
+      && Array.isArray(candidate.worldSystem.locations)
+      && Array.isArray(candidate.worldSystem.events),
   );
 }
 
-export function rollBirth(config: PrologueConfig): PrologueLife {
+export function rollBirth(config: PrologueConfig, worldDay = 1): PrologueLife {
   const count = rollRootCount(config.birth.rootRoll);
   const profile = config.rootProfiles[String(count)] ?? Object.values(config.rootProfiles)[0];
   if (!profile) throw new Error("序章规则中没有可用的灵根配置。");
@@ -389,6 +441,9 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     spiritPerProficiency: config.birth.stats.spiritPerProficiency,
   };
   const vitals = deriveVitals(stats, vitalRules);
+  const lifespanDays = config.worldSystem.lifespan.baseDays
+    + stats.defense * config.worldSystem.lifespan.daysPerDefense
+    + (config.worldSystem.lifespan.realmBonusDays[config.birth.realm] ?? 0);
   const sideQuest = config.sideQuests[profile.sideQuestId] ?? Object.values(config.sideQuests)[0];
   if (!sideQuest) throw new Error("序章规则中没有可用的支线配置。");
   const rolledArtId = rollWeighted(originConfig.startingCultivationRoll ?? [])?.id;
@@ -448,6 +503,11 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     mainQuest: { ...config.mainQuest },
     sideQuest: { ...sideQuest },
     sideQuestTriggered: false,
+    bornWorldDay: worldDay,
+    startingAgeDays: config.worldSystem.lifespan.startingAgeDays,
+    lifespanDays,
+    locationId: config.worldSystem.travel.startingLocationId,
+    revealedWorldEventIds: [],
   };
 }
 

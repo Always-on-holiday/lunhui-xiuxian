@@ -218,35 +218,40 @@
       "condition": "天灵根 · 已完成测灵",
       "summary": "回应众人的奉承，或记住那个始终没有开口的人。",
       "unlock": null,
-      "bonus": { "intelligence": 1 }
+      "bonus": { "intelligence": 1 },
+      "timeCostDays": 3
     },
     "paired_scroll": {
       "title": "相生旧卷",
       "condition": "双灵根 · 已完成测灵",
       "summary": "藏书阁里有一卷无人能读通的两仪残页。",
       "unlock": null,
-      "bonus": { "attack": 1 }
+      "bonus": { "attack": 1 },
+      "timeCostDays": 3
     },
     "herb_basket": {
       "title": "药篓缺角",
       "condition": "三灵根 · 智力达到 9",
       "summary": "药婆的旧篓里，总会多出一味不该出现的药草。",
       "unlock": { "stat": "intelligence", "minimum": 9 },
-      "bonus": { "proficiency": 1 }
+      "bonus": { "proficiency": 1 },
+      "timeCostDays": 5
     },
     "courtyard_chores": {
       "title": "四时杂役",
       "condition": "四灵根 · 速度达到 10",
       "summary": "四座偏院同时缺人，也许杂事本身就是一场修行。",
       "unlock": { "stat": "speed", "minimum": 10 },
-      "bonus": { "speed": 1 }
+      "bonus": { "speed": 1 },
+      "timeCostDays": 7
     },
     "five_element_stone": {
       "title": "井边的五行石",
       "condition": "五灵根 · 听见族人嘲讽",
       "summary": "所有人都走后，枯井底下却亮起了与你相同的五色微光。",
       "unlock": null,
-      "bonus": { "defense": 1 }
+      "bonus": { "defense": 1 },
+      "timeCostDays": 4
     }
   },
   "training": {
@@ -258,21 +263,24 @@
         "title": "替药婆辨草",
         "description": "从气味和叶脉里记住灵药，准备得更周全。",
         "risk": "风险低 · 智力、熟练度 +1",
-        "gains": { "intelligence": 1, "proficiency": 1 }
+        "gains": { "intelligence": 1, "proficiency": 1 },
+        "timeCostDays": 730
       },
       {
         "id": "stones",
         "title": "随父亲搬青石",
         "description": "日复一日打熬筋骨，以最笨的办法攒下底子。",
         "risk": "风险低 · 攻击、防御 +1",
-        "gains": { "attack": 1, "defense": 1 }
+        "gains": { "attack": 1, "defense": 1 },
+        "timeCostDays": 730
       },
       {
         "id": "kite",
         "title": "追逐后山纸鸢",
         "description": "在乱石和山风间练脚步，也学会判断风向。",
         "risk": "风险中 · 速度 +2",
-        "gains": { "speed": 2 }
+        "gains": { "speed": 2 },
+        "timeCostDays": 730
       }
     ]
   },
@@ -329,7 +337,8 @@
       }
     },
     "defeatBonus": { "proficiency": 1 },
-    "successLevel": 2
+    "successLevel": 2,
+    "timeCostDays": 1
   },
   "worldRules": {
     "death": {
@@ -350,6 +359,76 @@
         "maximumPlayers": 4,
         "unlockRealm": "练气境",
         "status": "筹备中"
+      }
+    ]
+  },
+  "worldSystem": {
+    "clock": {
+      "realSecondsPerWorldDay": 60,
+      "explanation": "现实每过 1 分钟，世界自动流逝 1 天；修炼、行路、休息和打听事件也会直接推进世界时间。"
+    },
+    "lifespan": {
+      "startingAgeDays": 2555,
+      "baseDays": 25550,
+      "daysPerDefense": 365,
+      "realmBonusDays": {
+        "锻体初期": 0,
+        "练气初期": 7300,
+        "筑基初期": 18250
+      }
+    },
+    "travel": {
+      "footPowerDivisor": 3,
+      "restDays": 1,
+      "storytellerDays": 1,
+      "startingLocationId": "nameless_ferry"
+    },
+    "locations": [
+      {
+        "id": "nameless_ferry",
+        "name": "无名渡",
+        "description": "灵舟停靠的小渡口，也是你这一世开始的地方。",
+        "type": "wild",
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "qingya_town",
+        "name": "青崖镇",
+        "description": "山门脚下的热闹小镇，可以投宿休息，也能找说书人打听天下大事。",
+        "type": "town",
+        "x": 5,
+        "y": 1
+      },
+      {
+        "id": "black_pine_forest",
+        "name": "黑松林",
+        "description": "通往北境的密林，偶尔有采药人与低阶妖兽出没。",
+        "type": "wild",
+        "x": 9,
+        "y": 4
+      }
+    ],
+    "events": [
+      {
+        "id": "qingya_recruitment",
+        "title": "青崖门开山收徒",
+        "startDay": 1,
+        "endDay": null,
+        "mode": "direct",
+        "summary": "青崖门山钟连响九次，今岁入门试炼已经开启。",
+        "detail": "所有适龄修士都可前往山门参加木傀试炼，北境各村镇已经收到告示。"
+      },
+      {
+        "id": "northern_spirit_tide",
+        "title": "北境灵潮异动",
+        "startDay": 10,
+        "endDay": null,
+        "mode": "storyteller",
+        "summary": "坊间传闻北境灵气倒流，详情需要前往青崖镇打听。",
+        "detail": "说书人压低声音：三日前黑松林上空出现青紫二色长虹，已有商队绕路，青崖门也派出了巡山弟子。",
+        "storytellerTownId": "qingya_town",
+        "timeCostDays": 1
       }
     ]
   }

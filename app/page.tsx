@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Copy, Dices, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles, Swords, Users, Zap } from "lucide-react";
+import { Clock3, Copy, Dices, Footprints, Globe2, Heart, LogOut, MapPinned, Megaphone, MoonStar, ScrollText, Shield, Sparkles, Swords, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +14,8 @@ import {
   itemWorksInContext,
   type PrologueConfig,
   type PrologueLife,
+  type WorldEvent,
+  type WorldLocation,
   resolveWoodenTrial,
   rollBirth,
   toggleTrialItem,
@@ -67,6 +69,19 @@ const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
   { key: "proficiency", label: "熟练" },
 ];
 
+function formatAge(days: number) {
+  const safeDays = Math.max(0, Math.floor(days));
+  const years = Math.floor(safeDays / 365);
+  const remainder = safeDays % 365;
+  return `${years} 年 ${remainder} 天`;
+}
+
+function travelDaysBetween(from: WorldLocation, to: WorldLocation, speed: number, divisor: number) {
+  const distance = Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
+  const footPower = Math.max(1, Math.floor(speed / Math.max(1, divisor)));
+  return Math.max(1, Math.ceil(distance / footPower));
+}
+
 type UiContent = typeof defaultContent;
 
 function mergeContent(value: unknown): UiContent {
@@ -114,6 +129,24 @@ export default function Home() {
   const [life, setLife] = useState<PrologueLife | null>(null);
   const [itemNotice, setItemNotice] = useState("");
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
+  const worldSystem = prologueConfig.worldSystem;
+  const currentLocation = life
+    ? worldSystem.locations.find((location) => location.id === (life.locationId ?? worldSystem.travel.startingLocationId))
+      ?? worldSystem.locations[0]
+    : undefined;
+  const livedWorldDays = life && room ? Math.max(0, room.worldDay - (life.bornWorldDay ?? 1)) : 0;
+  const ageDays = life ? (life.startingAgeDays ?? worldSystem.lifespan.startingAgeDays) + livedWorldDays : 0;
+  const calculatedLifespanDays = life
+    ? worldSystem.lifespan.baseDays
+      + life.stats.defense * worldSystem.lifespan.daysPerDefense
+      + (worldSystem.lifespan.realmBonusDays[life.realm] ?? 0)
+    : 0;
+  const lifespanDays = life?.lifespanDays ?? calculatedLifespanDays;
+  const remainingLifeDays = Math.max(0, lifespanDays - ageDays);
+  const lifeExpired = Boolean(life && remainingLifeDays <= 0);
+  const activeWorldEvents = room
+    ? worldSystem.events.filter((event) => room.worldDay >= event.startDay && (event.endDay == null || room.worldDay <= event.endDay))
+    : [];
 
   useEffect(() => {
     void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
@@ -350,17 +383,38 @@ export default function Home() {
   }, [session]);
 
   function beginLife() {
-    persistLife(rollBirth(prologueConfig));
+    persistLife(rollBirth(prologueConfig, room?.worldDay ?? 1));
+  }
+
+  async function spendWorldDays(days: number, updateLife: (current: PrologueLife) => PrologueLife) {
+    if (!session || !life || lifeExpired || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/rooms/${session.code}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerId: session.playerId, days }),
+      });
+      const data = await readJson(response) as unknown as { room: Room };
+      setRoom(data.room);
+      persistLife(updateLife(life));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "天道暂时无法推进。");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function beginSideQuest() {
     if (!life) return;
-    persistLife(triggerSideQuest(life));
+    void spendWorldDays(life.sideQuest.timeCostDays ?? 3, triggerSideQuest);
   }
 
   function selectTraining(choiceId: string) {
-    if (!life) return;
-    persistLife(chooseTraining(life, choiceId, prologueConfig.training.choices));
+    const choice = prologueConfig.training.choices.find((candidate) => candidate.id === choiceId);
+    if (!life || !choice) return;
+    void spendWorldDays(choice.timeCostDays, (current) => chooseTraining(current, choiceId, prologueConfig.training.choices));
   }
 
   function prepareTrialItem(itemId: string) {
@@ -381,7 +435,36 @@ export default function Home() {
   function startTrial() {
     if (!life?.training) return;
     setItemNotice("");
-    persistLife(resolveWoodenTrial(life, prologueConfig.trial));
+    void spendWorldDays(prologueConfig.trial.timeCostDays, (current) => resolveWoodenTrial(current, prologueConfig.trial));
+  }
+
+  function travelTo(destination: WorldLocation) {
+    if (!life || !currentLocation || destination.id === currentLocation.id) return;
+    const days = travelDaysBetween(
+      currentLocation,
+      destination,
+      life.stats.speed,
+      worldSystem.travel.footPowerDivisor,
+    );
+    void spendWorldDays(days, (current) => ({ ...current, locationId: destination.id }));
+  }
+
+  function restInTown() {
+    if (!life || currentLocation?.type !== "town") return;
+    void spendWorldDays(worldSystem.travel.restDays, (current) => ({
+      ...current,
+      currentHealth: current.maxHealth,
+      currentSpirit: current.maxSpirit,
+    }));
+  }
+
+  function hearWorldEvent(event: WorldEvent) {
+    if (!life || event.mode !== "storyteller" || event.storytellerTownId !== currentLocation?.id) return;
+    const days = event.timeCostDays ?? worldSystem.travel.storytellerDays;
+    void spendWorldDays(days, (current) => ({
+      ...current,
+      revealedWorldEventIds: [...new Set([...(current.revealedWorldEventIds ?? []), event.id])],
+    }));
   }
 
   function restartLife() {
@@ -436,6 +519,7 @@ export default function Home() {
             <div className="ink-panel rounded-lg border border-[#29443a] p-5">
               <p className="text-sm text-[#82968c]">{content.world.calendarLabel}</p>
               <p className="mt-2 text-2xl text-[#eef1e7]">{content.world.dayPrefix}{room.worldDay}{content.world.daySuffix}</p>
+              <p className="mt-1 text-xs text-[#667c71]">现实 1 分钟，世界 1 天</p>
             </div>
             <div className="ink-panel rounded-lg border border-[#29443a] p-5">
               <p className="text-sm text-[#82968c]">{content.world.pvpLabel}</p>
@@ -450,7 +534,7 @@ export default function Home() {
             <section className="ink-panel min-h-[540px] rounded-lg border border-[#29443a] p-6 sm:p-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm tracking-[0.2em] text-[#7ea28f]">{content.world.location}</p>
+                  <p className="text-sm tracking-[0.2em] text-[#7ea28f]">青冥洲 · {currentLocation?.name ?? "无名渡"}</p>
                   <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">
                     {life ? "这一世，从出生开始" : "命数未定，静候降生"}
                   </h1>
@@ -526,7 +610,7 @@ export default function Home() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={life.sideQuestTriggered || !sideQuestUnlocked}
+                        disabled={busy || lifeExpired || life.sideQuestTriggered || !sideQuestUnlocked}
                         onClick={beginSideQuest}
                         className="border-[#466155] bg-transparent text-[#bdc8c1] hover:bg-[#17352c] hover:text-white"
                       >
@@ -547,11 +631,12 @@ export default function Home() {
                             key={choice.id}
                             type="button"
                             onClick={() => selectTraining(choice.id)}
+                            disabled={busy || lifeExpired}
                             className="choice-card rounded-md border border-[#314b40] bg-[#091511] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b]"
                           >
                             <span className="text-[#ead9a5]">{choice.title}</span>
                             <span className="mt-2 block text-sm leading-6 text-[#8fa097]">{choice.description}</span>
-                            <span className="mt-3 block text-xs text-[#c49975]">{choice.risk}</span>
+                            <span className="mt-3 block text-xs text-[#c49975]">{choice.risk} · 耗时 {choice.timeCostDays} 天</span>
                           </button>
                         ))}
                       </div>
@@ -565,12 +650,12 @@ export default function Home() {
                       </p>
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         {(!life.battle || life.battle.outcome === "defeat") && (
-                          <Button onClick={startTrial} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                          <Button disabled={busy || lifeExpired} onClick={startTrial} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
                             <Swords className="h-4 w-4" />
                             {life.battle?.outcome === "defeat" ? prologueConfig.trial.retryButton : prologueConfig.trial.startButton}
                           </Button>
                         )}
-                        <span className="text-xs text-[#bc8d78]">{prologueConfig.trial.riskText}</span>
+                        <span className="text-xs text-[#bc8d78]">{prologueConfig.trial.riskText} · 耗时 {prologueConfig.trial.timeCostDays} 天</span>
                       </div>
                       {life.battle && life.battle.outcome !== "defeat" && (
                         <div className="mt-4 border-t border-[#29443a] pt-4 text-sm text-[#9fc6b3]">
@@ -591,6 +676,24 @@ export default function Home() {
                 </div>
                 {life ? (
                   <>
+                    <div className={`mt-4 rounded border p-3 ${lifeExpired ? "border-[#74463d] bg-[#2a1714]" : "border-[#394b42] bg-[#091511]"}`}>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex items-center gap-2 text-[#b7c4bc]"><Clock3 className="h-4 w-4" />年龄</span>
+                        <span className="font-mono text-[#e1d3a5]">{formatAge(ageDays)}（{ageDays} 天）</span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                        <span className="text-[#8da097]">预计寿元</span>
+                        <span className="font-mono text-[#d8dfda]">约 {Math.round(lifespanDays / 365)} 年（{lifespanDays} 天）</span>
+                      </div>
+                      <p className={`mt-2 text-xs ${lifeExpired ? "text-[#ef9a84]" : "text-[#789087]"}`}>
+                        {lifeExpired ? "寿元已尽，无法继续行动。" : `尚余 ${remainingLifeDays} 天；世界时间即使不行动也会流逝。`}
+                      </p>
+                      {lifeExpired && (
+                        <Button size="sm" onClick={restartLife} className="mt-3 w-full bg-[#9d5c4c] text-white hover:bg-[#b86d59]">
+                          寿尽转生
+                        </Button>
+                      )}
+                    </div>
                     <div className="mt-4 grid grid-cols-5 gap-2">
                       {STAT_LABELS.map(({ key, label }) => (
                         <div key={key} className="rounded border border-[#29443a] bg-[#091511] px-2 py-3 text-center">
@@ -622,6 +725,104 @@ export default function Home() {
                   </>
                 ) : (
                   <p className="mt-4 text-sm leading-6 text-[#71847a]">Roll 点后，这里只展示战斗真正需要的五维与两条资源。</p>
+                )}
+              </section>
+
+              <section className="ink-panel rounded-lg border border-[#5a4c2d] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
+                    <Megaphone className="h-5 w-5 text-[#d6b66d]" />
+                    天下大事
+                  </h2>
+                  <span className="text-xs text-[#8e815f]">第 {room.worldDay} 日</span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {activeWorldEvents.length > 0 ? activeWorldEvents.map((event) => {
+                    const revealed = event.mode === "direct" || (life?.revealedWorldEventIds ?? []).includes(event.id);
+                    const tellerTown = worldSystem.locations.find((location) => location.id === event.storytellerTownId);
+                    const atStoryteller = Boolean(life && currentLocation?.id === event.storytellerTownId);
+                    return (
+                      <div key={event.id} className="rounded border border-[#4b432c] bg-[#17170f] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm text-[#ead9a5]">{event.title}</p>
+                          <span className="text-xs text-[#9a8960]">{event.mode === "direct" ? "天道告示" : "坊间传闻"}</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-[#9da89f]">{revealed ? event.detail : event.summary}</p>
+                        {!revealed && event.mode === "storyteller" && (
+                          atStoryteller ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || lifeExpired}
+                              onClick={() => hearWorldEvent(event)}
+                              className="mt-3 border-[#6a5832] bg-transparent text-[#d8c484] hover:bg-[#2b2515] hover:text-white"
+                            >
+                              找说书人打听 · {event.timeCostDays ?? worldSystem.travel.storytellerDays} 天
+                            </Button>
+                          ) : (
+                            <p className="mt-2 text-xs text-[#bc8d78]">前往{tellerTown?.name ?? "城镇"}才能打听详情。</p>
+                          )
+                        )}
+                      </div>
+                    );
+                  }) : (
+                    <p className="text-sm text-[#71847a]">近日天下无大事。</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
+                    <MapPinned className="h-5 w-5" />
+                    行路地图
+                  </h2>
+                  <span className="flex items-center gap-1 text-xs text-[#82968c]">
+                    <Footprints className="h-3.5 w-3.5" />
+                    脚力 {life ? Math.max(1, Math.floor(life.stats.speed / Math.max(1, worldSystem.travel.footPowerDivisor))) : "—"}
+                  </span>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {worldSystem.locations.map((location) => {
+                    const here = currentLocation?.id === location.id;
+                    const days = life && currentLocation
+                      ? travelDaysBetween(currentLocation, location, life.stats.speed, worldSystem.travel.footPowerDivisor)
+                      : 0;
+                    return (
+                      <div key={location.id} className={`rounded border p-3 ${here ? "border-[#8b7444] bg-[#292313]" : "border-[#2b4439] bg-[#08130f]"}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-[#e6d8ad]">{location.name}</p>
+                            <p className="mt-1 text-xs text-[#71847a]">{location.type === "town" ? "城镇" : "野外"} · 坐标 {location.x},{location.y}</p>
+                          </div>
+                          {here ? (
+                            <span className="text-xs text-[#d6b66d]">当前所在地</span>
+                          ) : life ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || lifeExpired}
+                              onClick={() => travelTo(location)}
+                              className="border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"
+                            >
+                              前往 · {days} 天
+                            </Button>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-[#889990]">{location.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                {life && currentLocation?.type === "town" && (
+                  <Button
+                    disabled={busy || lifeExpired}
+                    onClick={restInTown}
+                    className="mt-3 w-full bg-[#355848] text-[#e4eee8] hover:bg-[#426d59]"
+                  >
+                    <MoonStar className="h-4 w-4" />
+                    投宿休息 · {worldSystem.travel.restDays} 天
+                  </Button>
                 )}
               </section>
 

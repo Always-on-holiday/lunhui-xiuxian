@@ -19,16 +19,42 @@
 - 木傀战斗目标值、随机波动、受伤范围和结算文字；
 - 死亡回退规则说明与多人遗迹预告。
 
-三、怎么增加剧情段落
-在 storyParagraphs 的方括号中添加一行文字。每一行之间必须有英文逗号，例如：
+三、怎么增加世界大事件
+在“序章规则.json”的 worldSystem.events 方括号中增加一项。
 
-"storyParagraphs": [
-  "第一段。",
-  "第二段。",
-  "新增加的第三段。"
-]
+直接公告使用：
+{
+  "id": "唯一英文编号",
+  "title": "事件标题",
+  "startDay": 1,
+  "endDay": null,
+  "mode": "direct",
+  "summary": "公告摘要",
+  "detail": "玩家直接看见的完整内容"
+}
 
-四、注意事项
+需要去城镇打听的事件使用 mode: "storyteller"，并填写：
+- storytellerTownId：说书人所在地点的 id；
+- timeCostDays：打听事件会消耗的世界天数。
+
+startDay 是事件开始出现的世界日。endDay 填 null 表示以后一直有效；填写数字则在该世界日之后消失。
+
+四、怎么增加地图地点
+在 worldSystem.locations 方括号中增加地点。id 必须是唯一英文编号；name 和 description 可以写中文。
+- type 填 town 时，玩家到达后可以投宿休息；填 wild 时是野外地点；
+- x 和 y 是简易地图坐标；两个地点坐标相差越远，行路耗时越长；
+- 玩家速度会换算成脚力，脚力越高，前往同一地点消耗的天数越少；
+- startingLocationId 决定新人物从哪个地点开始。
+
+五、时间和寿元
+- 现实每过 1 分钟，世界自动流逝 1 天；
+- 修行、支线、战斗、行路、投宿和打听事件都会立即增加世界天数；
+- training.choices、sideQuests、trial 和事件中的 timeCostDays 控制行动耗时；
+- lifespan.baseDays 是基础寿元，daysPerDefense 表示每点防御（当前作为体质）增加多少天；
+- realmBonusDays 表示不同境界额外增加的寿元；
+- 寿元耗尽后，本世不能继续行动，需要转生。
+
+六、注意事项
 - JSON 使用英文半角双引号和逗号。
 - 最后一项后面不要加逗号。
 - 如果格式写错，网页会继续使用上一次构建时的默认文字，不会破坏世界存档。
@@ -36,6 +62,7 @@
 - “序章规则.json”中的 rootRoll 使用 weight 表示相对概率。数值不必刚好加到 100，数字越大越容易抽到。
 - 灵根名称中的 {elements} 是元素占位符，游戏会自动换成“金·木·水”等实际结果。
 - 支线 unlock 为 null 时会直接解锁；填写 stat 和 minimum 时，会检查指定五维是否达到要求。
+- 世界大事件、地图和寿元配置位于 worldSystem。
 - origins 控制出身。修真世家的 startingCultivationRoll 会按 weight 再抽取一部功法。
 - cultivationArts、techniques 和 items 是内容目录；出身中填写对应 id，人物才会实际拥有它。
 - 道具 effects 中的 contextId 决定生效场景。木傀试炼使用 wooden_trial；场景不匹配时会提示无用，不加入计算也不消耗。
@@ -47,4 +74,4 @@
 - 新规则主要作用于新出生的人物。已经开始的角色会保留出生时的气血和灵力规则，避免中途变数值。
 - 提交到 GitHub 后，其他组员也能同步这些文字修改。
 
-后续接入事件系统时，会在本文件夹继续增加“事件库.json”“物品库.json”和“功法库.json”。建议每次只改一个小部分，保存后重启试玩确认。
+目前 worldSystem.events 是第一版世界事件库；复杂分支剧情仍会在后续拆分成独立“事件库.json”。建议每次只改一个小部分，保存后重启试玩确认。

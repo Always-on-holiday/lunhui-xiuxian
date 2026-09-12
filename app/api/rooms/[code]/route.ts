@@ -12,8 +12,8 @@ function cleanName(value: unknown) {
 
 async function loadRoom(code: string) {
   const room = await env.DB.prepare(
-    "SELECT code, pvp_enabled AS pvpEnabled, created_at AS createdAt FROM rooms WHERE code = ?"
-  ).bind(code).first<{ code: string; pvpEnabled: number; createdAt: string }>();
+    "SELECT code, pvp_enabled AS pvpEnabled, created_at AS createdAt, time_offset_days AS timeOffsetDays FROM rooms WHERE code = ?"
+  ).bind(code).first<{ code: string; pvpEnabled: number; createdAt: string; timeOffsetDays: number }>();
 
   if (!room) return null;
 
@@ -26,9 +26,39 @@ async function loadRoom(code: string) {
     code: room.code,
     pvpEnabled: room.pvpEnabled === 1,
     createdAt: room.createdAt,
-    worldDay: elapsedMinutes + 1,
+    worldDay: elapsedMinutes + room.timeOffsetDays + 1,
     players: result.results.map((player) => ({ ...player, isHost: player.isHost === 1 })),
   };
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const { code: rawCode } = await context.params;
+    const code = cleanCode(rawCode);
+    const body = await request.json() as { playerId?: unknown; days?: unknown };
+    const playerId = typeof body.playerId === "string" ? body.playerId : "";
+    const days = typeof body.days === "number" ? Math.floor(body.days) : 0;
+
+    if (!playerId) {
+      return Response.json({ error: "缺少角色凭证。" }, { status: 400 });
+    }
+    if (days < 1 || days > 3650) {
+      return Response.json({ error: "单次行动耗时应在 1 到 3650 天之间。" }, { status: 400 });
+    }
+
+    const advanced = await env.DB.prepare(
+      "UPDATE rooms SET time_offset_days = time_offset_days + ? WHERE code = ? AND EXISTS (SELECT 1 FROM players WHERE room_code = ? AND id = ? AND left_at IS NULL)"
+    ).bind(days, code, code, playerId).run();
+    if ((advanced.meta.changes ?? 0) !== 1) {
+      return Response.json({ error: "角色不在这个世界中。" }, { status: 403 });
+    }
+
+    const room = await loadRoom(code);
+    return Response.json({ room });
+  } catch (error) {
+    console.error("advance world time failed", error);
+    return Response.json({ error: "天道暂时无法推进。" }, { status: 500 });
+  }
 }
 
 export async function GET(_request: Request, context: RouteContext) {

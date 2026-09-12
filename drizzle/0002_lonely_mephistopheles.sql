@@ -1,0 +1,1 @@
+ALTER TABLE `rooms` ADD `time_offset_days` integer DEFAULT 0 NOT NULL;

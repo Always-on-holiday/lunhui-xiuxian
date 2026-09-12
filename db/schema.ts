@@ -5,6 +5,7 @@ export const rooms = sqliteTable("rooms", {
   hostKey: text("host_key").notNull(),
   pvpEnabled: integer("pvp_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull(),
+  timeOffsetDays: integer("time_offset_days").notNull().default(0),
 }, (table) => [
   index("idx_rooms_created_at").on(table.createdAt),
 ]);
