@@ -10,13 +10,15 @@ import {
   canTriggerSideQuest,
   chooseTraining,
   type FiveStats,
+  isPrologueConfig,
+  type PrologueConfig,
   type PrologueLife,
   resolveWoodenTrial,
   rollBirth,
-  TRAINING_CHOICES,
   triggerSideQuest,
 } from "@/lib/prologue";
 import defaultContent from "@/public/游戏内容/界面文字.json";
+import defaultPrologueConfig from "@/public/游戏内容/序章规则.json";
 
 type Player = {
   id: string;
@@ -98,6 +100,7 @@ async function readJson(response: Response) {
 
 export default function Home() {
   const [content, setContent] = useState<UiContent>(defaultContent);
+  const [prologueConfig, setPrologueConfig] = useState<PrologueConfig>(defaultPrologueConfig as PrologueConfig);
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [pvpEnabled, setPvpEnabled] = useState(false);
@@ -121,6 +124,18 @@ export default function Home() {
         document.title = nextContent.meta.title;
         const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
         if (description) description.content = nextContent.meta.description;
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void fetch(`/游戏内容/序章规则.json?v=${Date.now()}`, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("序章规则读取失败");
+        return response.json();
+      })
+      .then((value: unknown) => {
+        if (isPrologueConfig(value)) setPrologueConfig(value);
       })
       .catch(() => undefined);
   }, []);
@@ -332,7 +347,7 @@ export default function Home() {
   }, [session]);
 
   function beginLife() {
-    persistLife(rollBirth());
+    persistLife(rollBirth(prologueConfig));
   }
 
   function beginSideQuest() {
@@ -340,14 +355,14 @@ export default function Home() {
     persistLife(triggerSideQuest(life));
   }
 
-  function selectTraining(choiceId: "herbs" | "stones" | "kite") {
+  function selectTraining(choiceId: string) {
     if (!life) return;
-    persistLife(chooseTraining(life, choiceId));
+    persistLife(chooseTraining(life, choiceId, prologueConfig.training.choices));
   }
 
   function startTrial() {
     if (!life?.training) return;
-    persistLife(resolveWoodenTrial(life));
+    persistLife(resolveWoodenTrial(life, prologueConfig.trial));
   }
 
   function restartLife() {
@@ -433,15 +448,15 @@ export default function Home() {
               {!life ? (
                 <div className="space-y-6">
                   <p className="max-w-2xl text-base leading-8 text-[#b8c5bd]">
-                    世界先替你决定出身、五维与灵根。灵根数量会改变前期处境、天赋和可触发支线，但不会锁死最终潜力。
+                    {prologueConfig.intro.description}
                   </p>
                   <div className="rounded-md border border-[#2d483d] bg-[#08120f]/80 p-5">
-                    <p className="text-sm text-[#789087]">本次试玩流程</p>
-                    <p className="mt-2 leading-7 text-[#d9dfd7]">出生 Roll 点 → 童年选择 → 支线线索 → 木傀自动战斗 → 直接结算</p>
+                    <p className="text-sm text-[#789087]">{prologueConfig.intro.flowLabel}</p>
+                    <p className="mt-2 leading-7 text-[#d9dfd7]">{prologueConfig.intro.flowText}</p>
                   </div>
                   <Button onClick={beginLife} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
                     <Dices className="h-4 w-4" />
-                    掷定此生命数
+                    {prologueConfig.intro.rollButton}
                   </Button>
                 </div>
               ) : (
@@ -497,10 +512,10 @@ export default function Home() {
 
                   {!life.training ? (
                     <div>
-                      <p className="text-sm tracking-[0.16em] text-[#7ea28f]">七岁 · 第一次选择</p>
-                      <h2 className="mt-2 text-xl text-[#f0dfae]">山门测验前，你如何度过这几年？</h2>
+                      <p className="text-sm tracking-[0.16em] text-[#7ea28f]">{prologueConfig.training.eyebrow}</p>
+                      <h2 className="mt-2 text-xl text-[#f0dfae]">{prologueConfig.training.title}</h2>
                       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        {TRAINING_CHOICES.map((choice) => (
+                        {prologueConfig.training.choices.map((choice) => (
                           <button
                             key={choice.id}
                             type="button"
@@ -517,22 +532,22 @@ export default function Home() {
                   ) : (
                     <div className="rounded-md border border-[#2f493e] bg-[#08130f] p-5">
                       <p className="text-sm text-[#7f9589]">童年修行已定：{life.training.title}</p>
-                      <h2 className="mt-2 text-xl text-[#efdfb0]">青崖门木傀试炼</h2>
+                      <h2 className="mt-2 text-xl text-[#efdfb0]">{prologueConfig.trial.title}</h2>
                       <p className="mt-2 leading-7 text-[#aebbb4]">
-                        你只需决定是否入阵。攻防、先手与应变全部由程序比较，详细过程收在右侧小窗。
+                        {prologueConfig.trial.description}
                       </p>
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         {(!life.battle || life.battle.outcome === "defeat") && (
                           <Button onClick={startTrial} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
                             <Swords className="h-4 w-4" />
-                            {life.battle?.outcome === "defeat" ? "调息后再战" : "开始自动战斗"}
+                            {life.battle?.outcome === "defeat" ? prologueConfig.trial.retryButton : prologueConfig.trial.startButton}
                           </Button>
                         )}
-                        <span className="text-xs text-[#bc8d78]">风险：可能受伤 · 序章保护不会死亡</span>
+                        <span className="text-xs text-[#bc8d78]">{prologueConfig.trial.riskText}</span>
                       </div>
                       {life.battle && life.battle.outcome !== "defeat" && (
                         <div className="mt-4 border-t border-[#29443a] pt-4 text-sm text-[#9fc6b3]">
-                          锻体境主线试玩进度 1 / 1。正式版会在突破后立刻送达下一境界主线。
+                          {prologueConfig.trial.completionText}
                         </div>
                       )}
                     </div>
@@ -587,9 +602,9 @@ export default function Home() {
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
                     <Swords className="h-5 w-5" />
-                    战斗演算
+                    {prologueConfig.trial.windowTitle}
                   </h2>
-                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">自动</span>
+                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">{prologueConfig.trial.windowBadge}</span>
                 </div>
                 {life?.battle ? (
                   <div className="mt-4">
@@ -611,8 +626,8 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">
-                    <p className="text-sm text-[#71847a]">尚无战斗</p>
-                    <p className="mt-2 text-xs leading-5 text-[#566b61]">开战后只显示四项关键比较，并立刻给出战果。</p>
+                    <p className="text-sm text-[#71847a]">{prologueConfig.trial.emptyTitle}</p>
+                    <p className="mt-2 text-xs leading-5 text-[#566b61]">{prologueConfig.trial.emptyText}</p>
                   </div>
                 )}
               </section>

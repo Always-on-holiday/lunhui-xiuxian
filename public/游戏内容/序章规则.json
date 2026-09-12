@@ -1,0 +1,201 @@
+{
+  "meta": { "version": 1, "title": "出生与锻体序章" },
+  "intro": {
+    "description": "世界先替你决定出身、五维与灵根。灵根数量会改变前期处境、天赋和可触发支线，但不会锁死最终潜力。",
+    "flowLabel": "本次试玩流程",
+    "flowText": "出生 Roll 点 → 童年选择 → 支线线索 → 木傀自动战斗 → 直接结算",
+    "rollButton": "掷定此生命数"
+  },
+  "birth": {
+    "level": 1,
+    "realm": "锻体初期",
+    "story": "你出生在青冥洲北境的一户凡人家中。第七年，山门测灵舟停在了村口。",
+    "stats": {
+      "minimum": 8,
+      "maximum": 11,
+      "healthBase": 34,
+      "healthPerDefense": 3,
+      "spiritBase": 18,
+      "spiritPerIntelligence": 2,
+      "spiritPerProficiency": 1
+    },
+    "elements": ["金", "木", "水", "火", "土"],
+    "rootRoll": [
+      { "count": 1, "weight": 8 },
+      { "count": 2, "weight": 17 },
+      { "count": 3, "weight": 30 },
+      { "count": 4, "weight": 27 },
+      { "count": 5, "weight": 18 }
+    ]
+  },
+  "mainQuest": {
+    "title": "锻体境主线 · 叩开仙门",
+    "condition": "突破练气前必须完成",
+    "summary": "完成一次童年修行，并通过青崖门的木傀试炼。"
+  },
+  "rootProfiles": {
+    "1": {
+      "nameTemplate": "{elements}系天灵根",
+      "talent": "一脉通明",
+      "talentText": "本命功法更快成形；被追捧时更容易获得师承，也更容易成为众矢之的。",
+      "reception": "测灵石只亮起一道纯光。族老们纷纷起身，奉承声几乎盖过了钟鸣。",
+      "growth": "前期顺遂 · 上限不独占",
+      "statBonus": { "intelligence": 1 },
+      "sideQuestId": "fame"
+    },
+    "2": {
+      "nameTemplate": "{elements}双灵根",
+      "talent": "两仪相济",
+      "talentText": "两种灵气可以互相补足，首次陷入劣势时获得一次小幅反击。",
+      "reception": "两色灵光相生相绕。执事点头，把你的名字写进了内堂候选。",
+      "growth": "成形较快 · 路线灵活",
+      "statBonus": { "attack": 1 },
+      "sideQuestId": "paired_scroll"
+    },
+    "3": {
+      "nameTemplate": "{elements}三灵根",
+      "talent": "三才并进",
+      "talentText": "修炼、见识和实战能够互相带动，属性成长更加均衡。",
+      "reception": "三道灵光平稳升起。没人惊呼，但负责记录的老者多看了你一眼。",
+      "growth": "稳步成长 · 不易偏科",
+      "statBonus": { "defense": 1 },
+      "sideQuestId": "herb_basket"
+    },
+    "4": {
+      "nameTemplate": "{elements}四灵根",
+      "talent": "四象借势",
+      "talentText": "更容易利用环境与克制，每段旅程可将一次坏结果缓和为普通结果。",
+      "reception": "四道灵光明灭不定。执事说资质普通，却又嘱咐你别荒废这份通变。",
+      "growth": "前期稍慢 · 奇遇更多",
+      "statBonus": { "speed": 1 },
+      "sideQuestId": "courtyard_chores"
+    },
+    "5": {
+      "nameTemplate": "{elements}五灵根",
+      "talent": "五行归藏",
+      "talentText": "开局修炼较慢；每次突破大境界都会额外沉淀成长，并开启五行专属支线。",
+      "reception": "五色微光挤在石面上，旁边传来一声嗤笑。只有角落里的扫地老人没有笑。",
+      "growth": "前期受困 · 后劲极强",
+      "statBonus": { "proficiency": -1 },
+      "sideQuestId": "five_element_stone"
+    }
+  },
+  "sideQuests": {
+    "fame": {
+      "title": "盛名之下",
+      "condition": "天灵根 · 已完成测灵",
+      "summary": "回应众人的奉承，或记住那个始终没有开口的人。",
+      "unlock": null,
+      "bonus": { "intelligence": 1 }
+    },
+    "paired_scroll": {
+      "title": "相生旧卷",
+      "condition": "双灵根 · 已完成测灵",
+      "summary": "藏书阁里有一卷无人能读通的两仪残页。",
+      "unlock": null,
+      "bonus": { "attack": 1 }
+    },
+    "herb_basket": {
+      "title": "药篓缺角",
+      "condition": "三灵根 · 智力达到 9",
+      "summary": "药婆的旧篓里，总会多出一味不该出现的药草。",
+      "unlock": { "stat": "intelligence", "minimum": 9 },
+      "bonus": { "proficiency": 1 }
+    },
+    "courtyard_chores": {
+      "title": "四时杂役",
+      "condition": "四灵根 · 速度达到 10",
+      "summary": "四座偏院同时缺人，也许杂事本身就是一场修行。",
+      "unlock": { "stat": "speed", "minimum": 10 },
+      "bonus": { "speed": 1 }
+    },
+    "five_element_stone": {
+      "title": "井边的五行石",
+      "condition": "五灵根 · 听见族人嘲讽",
+      "summary": "所有人都走后，枯井底下却亮起了与你相同的五色微光。",
+      "unlock": null,
+      "bonus": { "defense": 1 }
+    }
+  },
+  "training": {
+    "eyebrow": "七岁 · 第一次选择",
+    "title": "山门测验前，你如何度过这几年？",
+    "choices": [
+      {
+        "id": "herbs",
+        "title": "替药婆辨草",
+        "description": "从气味和叶脉里记住灵药，准备得更周全。",
+        "risk": "风险低 · 智力、熟练度 +1",
+        "gains": { "intelligence": 1, "proficiency": 1 }
+      },
+      {
+        "id": "stones",
+        "title": "随父亲搬青石",
+        "description": "日复一日打熬筋骨，以最笨的办法攒下底子。",
+        "risk": "风险低 · 攻击、防御 +1",
+        "gains": { "attack": 1, "defense": 1 }
+      },
+      {
+        "id": "kite",
+        "title": "追逐后山纸鸢",
+        "description": "在乱石和山风间练脚步，也学会判断风向。",
+        "risk": "风险中 · 速度 +2",
+        "gains": { "speed": 2 }
+      }
+    ]
+  },
+  "trial": {
+    "title": "青崖门木傀试炼",
+    "description": "你只需决定是否入阵。攻防、先手与应变全部由程序比较，详细过程收在右侧小窗。",
+    "riskText": "风险：可能受伤 · 序章保护不会死亡",
+    "startButton": "开始自动战斗",
+    "retryButton": "调息后再战",
+    "completionText": "锻体境主线试玩进度 1 / 1。正式版会在突破后立刻送达下一境界主线。",
+    "windowTitle": "战斗演算",
+    "windowBadge": "自动",
+    "emptyTitle": "尚无战斗",
+    "emptyText": "开战后只显示四项关键比较，并立刻给出战果。",
+    "calculations": {
+      "initiativeRandom": { "min": 0, "max": 3 },
+      "offenseRandom": { "min": 1, "max": 4 },
+      "guardRandom": { "min": 1, "max": 4 },
+      "techniqueRandom": { "min": 0, "max": 3 },
+      "preferredRootCounts": [1, 5],
+      "preferredRootBonus": 2,
+      "normalRootBonus": 1
+    },
+    "comparisons": {
+      "initiative": { "label": "抢占先手", "target": 14 },
+      "offense": { "label": "正面破势", "target": 15 },
+      "guard": { "label": "承受反击", "target": 14 },
+      "technique": { "label": "灵根应变", "target": 15 }
+    },
+    "victoryMinimumWins": 3,
+    "closeMinimumWins": 2,
+    "healthLoss": {
+      "victory": { "min": 2, "max": 6 },
+      "close": { "min": 7, "max": 12 },
+      "defeat": { "min": 13, "max": 18 }
+    },
+    "spiritLoss": { "min": 5, "max": 9 },
+    "outcomes": {
+      "victory": {
+        "title": "胜利 · 稳稳过关",
+        "summary": "木傀被你压回阵眼。过程不算轻松，但局势始终在掌握之中。",
+        "reward": "获得：入门木牌、修为 +1"
+      },
+      "close": {
+        "title": "险胜 · 带伤入门",
+        "summary": "最后一击几乎同时落下。你扶着木傀站稳，终于等到执事点头。",
+        "reward": "获得：入门木牌、旧伤标记、修为 +1"
+      },
+      "defeat": {
+        "title": "落败 · 尚可再战",
+        "summary": "木傀将你逼出阵外。序章不会致死，你记住了它的起手式。",
+        "reward": "获得：熟练度 +1；调息后可以重试"
+      }
+    },
+    "defeatBonus": { "proficiency": 1 },
+    "successLevel": 2
+  }
+}
