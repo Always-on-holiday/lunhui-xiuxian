@@ -1,11 +1,21 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Copy, Globe2, LogOut, Shield, Sparkles, Swords, Users } from "lucide-react";
+import { Copy, Dices, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles, Swords, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  canTriggerSideQuest,
+  chooseTraining,
+  type FiveStats,
+  type PrologueLife,
+  resolveWoodenTrial,
+  rollBirth,
+  TRAINING_CHOICES,
+  triggerSideQuest,
+} from "@/lib/prologue";
 import defaultContent from "@/public/游戏内容/界面文字.json";
 
 type Player = {
@@ -43,6 +53,15 @@ type ModelContext = {
 };
 
 const SESSION_KEY = "lunhui-xiuxian-session";
+const LIFE_KEY = "lunhui-xiuxian-prologue-v1";
+
+const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
+  { key: "attack", label: "攻击" },
+  { key: "defense", label: "防御" },
+  { key: "speed", label: "速度" },
+  { key: "intelligence", label: "智力" },
+  { key: "proficiency", label: "熟练" },
+];
 
 type UiContent = typeof defaultContent;
 
@@ -87,6 +106,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [life, setLife] = useState<PrologueLife | null>(null);
+  const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
 
   useEffect(() => {
     void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
@@ -169,32 +190,59 @@ export default function Home() {
   }, [enterSession, refreshRoom]);
 
   useEffect(() => {
-    const queryCode = new URLSearchParams(window.location.search).get("room");
-    if (queryCode) setRoomCode(queryCode.toUpperCase().slice(0, 6));
-    const saved = localStorage.getItem(SESSION_KEY);
-    if (!saved) return;
-    try {
-      const restored = JSON.parse(saved) as Session;
-      if (restored.code && restored.playerId && restored.name) {
-        setSession(restored);
-        setName(restored.name);
-        setRoomCode(restored.code);
+    const timer = window.setTimeout(() => {
+      const queryCode = new URLSearchParams(window.location.search).get("room");
+      if (queryCode) setRoomCode(queryCode.toUpperCase().slice(0, 6));
+      const saved = localStorage.getItem(SESSION_KEY);
+      if (!saved) return;
+      try {
+        const restored = JSON.parse(saved) as Session;
+        if (restored.code && restored.playerId && restored.name) {
+          setSession(restored);
+          setName(restored.name);
+          setRoomCode(restored.code);
+        }
+      } catch {
+        localStorage.removeItem(SESSION_KEY);
       }
-    } catch {
-      localStorage.removeItem(SESSION_KEY);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (!session) return;
-    void refreshRoom().catch((caught) => {
-      setError(caught instanceof Error ? caught.message : "世界暂时失去回应。");
-    });
+    const initialTimer = window.setTimeout(() => {
+      void refreshRoom().catch((caught) => {
+        setError(caught instanceof Error ? caught.message : "世界暂时失去回应。");
+      });
+    }, 0);
     const timer = window.setInterval(() => {
       void refreshRoom().catch(() => undefined);
     }, 4000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [refreshRoom, session]);
+
+  useEffect(() => {
+    let restored: PrologueLife | null = null;
+    if (!session) {
+      const timer = window.setTimeout(() => setLife(null), 0);
+      return () => window.clearTimeout(timer);
+    }
+    const saved = localStorage.getItem(`${LIFE_KEY}:${session.playerId}`);
+    if (saved) {
+      try {
+        const candidate = JSON.parse(saved) as PrologueLife;
+        restored = candidate.version === 1 ? candidate : null;
+      } catch {
+        localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+      }
+    }
+    const timer = window.setTimeout(() => setLife(restored), 0);
+    return () => window.clearTimeout(timer);
+  }, [session]);
 
   useEffect(() => {
     const modelContext = (document as Document & { modelContext?: ModelContext }).modelContext;
@@ -277,6 +325,37 @@ export default function Home() {
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  const persistLife = useCallback((next: PrologueLife) => {
+    if (!session) return;
+    localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(next));
+    setLife(next);
+  }, [session]);
+
+  function beginLife() {
+    persistLife(rollBirth());
+  }
+
+  function beginSideQuest() {
+    if (!life) return;
+    persistLife(triggerSideQuest(life));
+  }
+
+  function selectTraining(choiceId: "herbs" | "stones" | "kite") {
+    if (!life) return;
+    persistLife(chooseTraining(life, choiceId));
+  }
+
+  function startTrial() {
+    if (!life?.training) return;
+    persistLife(resolveWoodenTrial(life));
+  }
+
+  function restartLife() {
+    if (!session) return;
+    localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+    setLife(null);
+  }
+
   async function leaveRoom() {
     if (session) {
       await fetch(`/api/rooms/${session.code}?playerId=${encodeURIComponent(session.playerId)}`, {
@@ -332,59 +411,237 @@ export default function Home() {
             </div>
           </section>
 
-          <div className="grid gap-5 lg:grid-cols-[1.45fr_0.8fr]">
-            <section className="ink-panel min-h-[440px] rounded-lg border border-[#29443a] p-6 sm:p-8">
-              <div className="flex items-center justify-between gap-4">
+          <div className="grid gap-5 lg:grid-cols-[1.35fr_0.82fr]">
+            <section className="ink-panel min-h-[540px] rounded-lg border border-[#29443a] p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm tracking-[0.2em] text-[#7ea28f]">{content.world.location}</p>
-                  <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">{content.world.heading}</h1>
+                  <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">
+                    {life ? "这一世，从出生开始" : "命数未定，静候降生"}
+                  </h1>
                 </div>
-                <Sparkles className="slow-pulse h-6 w-6 text-[#d6b66d]" />
+                {life ? (
+                  <Button variant="ghost" size="sm" onClick={restartLife} className="text-[#758a80] hover:bg-[#17352c] hover:text-white">
+                    重开本世
+                  </Button>
+                ) : (
+                  <Sparkles className="slow-pulse h-6 w-6 text-[#d6b66d]" />
+                )}
               </div>
               <div className="gold-rule my-6 h-px" />
-              <div className="space-y-5 text-base leading-8 text-[#b8c5bd]">
-                {content.world.storyParagraphs.map((paragraph, index) => (
-                  <p key={`${index}-${paragraph.slice(0, 12)}`}>{paragraph}</p>
-                ))}
-                <div className="rounded-md border border-[#2d483d] bg-[#08120f]/80 p-4">
-                  <p className="text-sm text-[#789087]">{content.world.noticeTitle}</p>
-                  <p className="mt-2 text-[#d9dfd7]">{content.world.noticeText}</p>
+
+              {!life ? (
+                <div className="space-y-6">
+                  <p className="max-w-2xl text-base leading-8 text-[#b8c5bd]">
+                    世界先替你决定出身、五维与灵根。灵根数量会改变前期处境、天赋和可触发支线，但不会锁死最终潜力。
+                  </p>
+                  <div className="rounded-md border border-[#2d483d] bg-[#08120f]/80 p-5">
+                    <p className="text-sm text-[#789087]">本次试玩流程</p>
+                    <p className="mt-2 leading-7 text-[#d9dfd7]">出生 Roll 点 → 童年选择 → 支线线索 → 木傀自动战斗 → 直接结算</p>
+                  </div>
+                  <Button onClick={beginLife} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
+                    <Dices className="h-4 w-4" />
+                    掷定此生命数
+                  </Button>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <p className="leading-8 text-[#b8c5bd]">{life.birthText}</p>
+                    <div className="mt-4 rounded-md border border-[#5a4c2d] bg-[#17170f]/90 p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm tracking-[0.18em] text-[#a8996e]">测灵结果</p>
+                          <h2 className="mt-1 text-xl text-[#efd48d]">{life.root.name}</h2>
+                        </div>
+                        <span className="rounded-full border border-[#65583b] px-3 py-1 text-xs text-[#cabb91]">{life.root.growth}</span>
+                      </div>
+                      <p className="mt-4 leading-7 text-[#c5c7b9]">{life.root.reception}</p>
+                      <p className="mt-3 text-sm text-[#91a39a]">天赋「{life.root.talent}」：{life.root.talentText}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-[#35584a] bg-[#0a1a15] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex items-center gap-2 text-[#e8d79e]">
+                        <ScrollText className="h-4 w-4" />
+                        {life.mainQuest.title}
+                      </p>
+                      <span className="rounded-full bg-[#234d3d] px-3 py-1 text-xs text-[#bde2d0]">
+                        {life.battle && life.battle.outcome !== "defeat" ? "已完成" : "立即引导"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[#aebbb4]">{life.mainQuest.summary}</p>
+                    <p className="mt-2 text-xs text-[#dc9b7e]">境界期限：{life.mainQuest.condition}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[#394b42] bg-[#091511] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm text-[#82968c]">支线 · {life.sideQuestTriggered ? "已触发" : sideQuestUnlocked ? "可触发" : "条件未满足"}</p>
+                        <p className="mt-1 text-[#e2e7df]">{life.sideQuest.title}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={life.sideQuestTriggered || !sideQuestUnlocked}
+                        onClick={beginSideQuest}
+                        className="border-[#466155] bg-transparent text-[#bdc8c1] hover:bg-[#17352c] hover:text-white"
+                      >
+                        {life.sideQuestTriggered ? "线索已收下" : sideQuestUnlocked ? "触发线索" : "尚未解锁"}
+                      </Button>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[#899b92]">解锁条件：{life.sideQuest.condition}</p>
+                    <p className="mt-1 text-sm leading-6 text-[#aeb9b2]">{life.sideQuest.summary}</p>
+                  </div>
+
+                  {!life.training ? (
+                    <div>
+                      <p className="text-sm tracking-[0.16em] text-[#7ea28f]">七岁 · 第一次选择</p>
+                      <h2 className="mt-2 text-xl text-[#f0dfae]">山门测验前，你如何度过这几年？</h2>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        {TRAINING_CHOICES.map((choice) => (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            onClick={() => selectTraining(choice.id)}
+                            className="choice-card rounded-md border border-[#314b40] bg-[#091511] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b]"
+                          >
+                            <span className="text-[#ead9a5]">{choice.title}</span>
+                            <span className="mt-2 block text-sm leading-6 text-[#8fa097]">{choice.description}</span>
+                            <span className="mt-3 block text-xs text-[#c49975]">{choice.risk}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-[#2f493e] bg-[#08130f] p-5">
+                      <p className="text-sm text-[#7f9589]">童年修行已定：{life.training.title}</p>
+                      <h2 className="mt-2 text-xl text-[#efdfb0]">青崖门木傀试炼</h2>
+                      <p className="mt-2 leading-7 text-[#aebbb4]">
+                        你只需决定是否入阵。攻防、先手与应变全部由程序比较，详细过程收在右侧小窗。
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        {(!life.battle || life.battle.outcome === "defeat") && (
+                          <Button onClick={startTrial} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                            <Swords className="h-4 w-4" />
+                            {life.battle?.outcome === "defeat" ? "调息后再战" : "开始自动战斗"}
+                          </Button>
+                        )}
+                        <span className="text-xs text-[#bc8d78]">风险：可能受伤 · 序章保护不会死亡</span>
+                      </div>
+                      {life.battle && life.battle.outcome !== "defeat" && (
+                        <div className="mt-4 border-t border-[#29443a] pt-4 text-sm text-[#9fc6b3]">
+                          锻体境主线试玩进度 1 / 1。正式版会在突破后立刻送达下一境界主线。
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
-            <aside className="ink-panel rounded-lg border border-[#29443a] p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
-                  <Users className="h-5 w-5" />
-                  {content.world.playersTitle}
-                </h2>
-                <span className="text-sm text-[#82968c]">{room.players.length} / 4</span>
-              </div>
-              <div className="mt-5 space-y-3">
-                {room.players.map((player, index) => (
-                  <div key={player.id} className="flex items-center gap-3 rounded-md border border-[#284138] bg-[#091511] p-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-full border border-[#426052] bg-[#12251f] text-[#d9c487]">
-                      {index + 1}
+            <aside className="space-y-5">
+              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg text-[#f0dfae]">此世命格</h2>
+                  <span className="text-sm text-[#82968c]">{life ? `${life.realm} · ${life.level}级` : "尚未降生"}</span>
+                </div>
+                {life ? (
+                  <>
+                    <div className="mt-4 grid grid-cols-5 gap-2">
+                      {STAT_LABELS.map(({ key, label }) => (
+                        <div key={key} className="rounded border border-[#29443a] bg-[#091511] px-2 py-3 text-center">
+                          <p className="text-xs text-[#71847a]">{label}</p>
+                          <p className="mt-1 font-mono text-lg text-[#e7d49c]">{life.stats[key]}</p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[#e7ebe4]">{player.name}</p>
-                      <p className="text-sm text-[#74877e]">{player.isHost ? content.world.hostRole : content.world.playerRole}</p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-[#b6c4bc]"><Heart className="h-4 w-4 text-[#d8796a]" />气血</span>
+                          <span className="font-mono text-[#d8dfda]">{life.currentHealth} / {life.maxHealth}</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2823]">
+                          <div className="h-full rounded-full bg-[#b95f55]" style={{ width: `${Math.round((life.currentHealth / life.maxHealth) * 100)}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-[#b6c4bc]"><Zap className="h-4 w-4 text-[#6e9fc0]" />灵力</span>
+                          <span className="font-mono text-[#d8dfda]">{life.currentSpirit} / {life.maxSpirit}</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2823]">
+                          <div className="h-full rounded-full bg-[#5f91b5]" style={{ width: `${Math.round((life.currentSpirit / life.maxSpirit) * 100)}%` }} />
+                        </div>
+                      </div>
                     </div>
-                    {player.id === session.playerId && <span className="text-sm text-[#d6b66d]">{content.world.currentPlayer}</span>}
+                  </>
+                ) : (
+                  <p className="mt-4 text-sm leading-6 text-[#71847a]">Roll 点后，这里只展示战斗真正需要的五维与两条资源。</p>
+                )}
+              </section>
+
+              <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
+                    <Swords className="h-5 w-5" />
+                    战斗演算
+                  </h2>
+                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">自动</span>
+                </div>
+                {life?.battle ? (
+                  <div className="mt-4">
+                    <div className="space-y-2">
+                      {life.battle.comparisons.map((item) => (
+                        <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
+                          <span className="text-[#93a59b]">{item.label}</span>
+                          <span className={item.player >= item.enemy ? "text-[#8fc9aa]" : "text-[#d58b79]"}>
+                            {item.player} : {item.enemy} · {item.verdict}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className={`mt-4 rounded-md border p-4 ${life.battle.outcome === "defeat" ? "border-[#73443b] bg-[#2a1714]" : "border-[#486a58] bg-[#10241c]"}`}>
+                      <p className="text-lg text-[#f1dfaa]">{life.battle.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.battle.summary}</p>
+                      <p className="mt-2 text-sm text-[#d4b875]">{life.battle.reward}</p>
+                    </div>
                   </div>
-                ))}
-                {Array.from({ length: Math.max(0, 4 - room.players.length) }).map((_, index) => (
-                  <div key={index} className="rounded-md border border-dashed border-[#284138] px-4 py-4 text-center text-sm text-[#667a70]">
-                    {content.world.emptySlot}
+                ) : (
+                  <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">
+                    <p className="text-sm text-[#71847a]">尚无战斗</p>
+                    <p className="mt-2 text-xs leading-5 text-[#566b61]">开战后只显示四项关键比较，并立刻给出战果。</p>
                   </div>
-                ))}
-              </div>
-              <Button onClick={copyInvite} className="mt-5 w-full bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
-                <Copy className="h-4 w-4" />
-                {copied ? content.world.copiedInvite : content.world.copyInvite}
-              </Button>
-              {error && <p className="mt-3 text-sm text-[#e99580]">{error}</p>}
+                )}
+              </section>
+
+              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-base text-[#f0dfae]">
+                    <Users className="h-4 w-4" />
+                    {content.world.playersTitle}
+                  </h2>
+                  <span className="text-sm text-[#82968c]">{room.players.length} / 4</span>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {room.players.map((player) => (
+                    <div key={player.id} className="flex items-center gap-3 rounded-md border border-[#284138] bg-[#091511] px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-[#e7ebe4]">{player.name}</p>
+                        <p className="text-xs text-[#74877e]">{player.isHost ? content.world.hostRole : content.world.playerRole}</p>
+                      </div>
+                      {player.id === session.playerId && <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>}
+                    </div>
+                  ))}
+                </div>
+                <Button onClick={copyInvite} size="sm" className="mt-4 w-full bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                  <Copy className="h-4 w-4" />
+                  {copied ? content.world.copiedInvite : content.world.copyInvite}
+                </Button>
+                {error && <p className="mt-3 text-sm text-[#e99580]">{error}</p>}
+              </section>
             </aside>
           </div>
         </div>

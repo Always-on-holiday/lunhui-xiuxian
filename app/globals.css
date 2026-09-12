@@ -71,6 +71,12 @@ input {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(214, 182, 109, 0.85);
+  outline-offset: 2px;
+}
+
 .world-grid {
   background-image:
     linear-gradient(rgba(222, 203, 145, 0.035) 1px, transparent 1px),
@@ -94,6 +100,21 @@ input {
   border: 1px solid rgba(194, 79, 62, 0.82);
   color: #e99580;
   box-shadow: inset 0 0 0 2px rgba(194, 79, 62, 0.12);
+}
+
+.choice-card {
+  min-height: 10.5rem;
+}
+
+.battle-window {
+  position: sticky;
+  top: 1.25rem;
+}
+
+@media (max-width: 1023px) {
+  .battle-window {
+    position: static;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
