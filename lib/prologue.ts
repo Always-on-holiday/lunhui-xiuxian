@@ -56,6 +56,8 @@ export type BattleReport = {
   comparisons: BattleComparison[];
   healthAfter: number;
   spiritAfter: number;
+  usedItems?: string[];
+  itemMessages?: string[];
 };
 
 type RootProfileConfig = Omit<SpiritualRoot, "count" | "name" | "elements"> & {
@@ -64,9 +66,60 @@ type RootProfileConfig = Omit<SpiritualRoot, "count" | "name" | "elements"> & {
   sideQuestId: string;
 };
 
-type TrialComparisonKey = "initiative" | "offense" | "guard" | "technique";
+export type TrialComparisonKey = "initiative" | "offense" | "guard" | "technique";
+
+export type LearnedAbility = {
+  id: string;
+  name: string;
+  grade: string;
+  description: string;
+};
+
+export type ItemEffect = {
+  contextId: string;
+  message: string;
+  battleBonus?: Partial<Record<TrialComparisonKey, number>>;
+  bonusWins?: number;
+  forceOutcome?: BattleReport["outcome"];
+  specialResult?: string;
+};
+
+export type InventoryItem = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  quantity: number;
+  consumable: boolean;
+  effects: ItemEffect[];
+};
+
+export type Origin = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type HiddenTalent = {
+  id: string;
+  name: string;
+  description: string;
+  revealCondition: string;
+};
+
+type OriginConfig = Origin & {
+  weight: number;
+  statBonus: Partial<FiveStats>;
+  spiritStones: number;
+  startingItems: string[];
+  startingCultivationArts?: string[];
+  startingCultivationRoll?: Array<{ id: string; weight: number }>;
+  startingTechniques?: string[];
+  hiddenTalentId?: string;
+};
 
 type TrialRules = {
+  contextId: string;
   title: string;
   description: string;
   riskText: string;
@@ -112,6 +165,30 @@ export type PrologueConfig = {
     elements: string[];
     rootRoll: Array<{ count: number; weight: number }>;
   };
+  character: {
+    originResultLabel: string;
+    assetsTitle: string;
+    spiritStoneLabel: string;
+    inventoryTab: string;
+    cultivationTab: string;
+    techniqueTab: string;
+    inventoryEmpty: string;
+    cultivationEmpty: string;
+    techniqueEmpty: string;
+    selectItem: string;
+    selectedItem: string;
+    itemUseHint: string;
+    uselessItemTemplate: string;
+    usefulItemTemplate: string;
+    unselectedItemTemplate: string;
+    origins: OriginConfig[];
+    startingCultivationArts: string[];
+    startingTechniques: string[];
+    cultivationArts: Record<string, LearnedAbility>;
+    techniques: Record<string, LearnedAbility>;
+    items: Record<string, InventoryItem>;
+    hiddenTalents: Record<string, HiddenTalent>;
+  };
   mainQuest: Quest;
   rootProfiles: Record<string, RootProfileConfig>;
   sideQuests: Record<string, Quest>;
@@ -121,6 +198,25 @@ export type PrologueConfig = {
     choices: TrainingChoice[];
   };
   trial: TrialRules;
+  worldRules: {
+    death: {
+      title: string;
+      summary: string;
+      worldContinuesOnPlayerDeath: boolean;
+      rewindWhenAllPlayersDead: boolean;
+      rewindTarget: string;
+    };
+    multiplayerTitle: string;
+    raids: Array<{
+      id: string;
+      name: string;
+      description: string;
+      minimumPlayers: number;
+      maximumPlayers: number;
+      unlockRealm: string;
+      status: string;
+    }>;
+  };
 };
 
 export type PrologueLife = {
@@ -129,6 +225,13 @@ export type PrologueLife = {
   realm: string;
   stats: FiveStats;
   root: SpiritualRoot;
+  origin?: Origin;
+  spiritStones?: number;
+  inventory?: InventoryItem[];
+  cultivationArts?: LearnedAbility[];
+  techniques?: LearnedAbility[];
+  hiddenTalent?: HiddenTalent;
+  selectedTrialItemIds?: string[];
   vitalRules?: VitalRules;
   maxHealth: number;
   maxSpirit: number;
@@ -181,17 +284,28 @@ function shuffledElements(elements: string[], count: number) {
   return values.slice(0, count);
 }
 
-function rollRootCount(options: PrologueConfig["birth"]["rootRoll"]) {
+function rollWeighted<T extends { weight: number }>(options: T[]) {
   const usable = options.filter((item) => item.weight > 0);
   const totalWeight = usable.reduce((sum, item) => sum + item.weight, 0);
-  if (totalWeight <= 0) return options[0]?.count ?? 1;
+  if (totalWeight <= 0) return options[0];
 
   let roll = randomInt(1, totalWeight);
   for (const option of usable) {
     roll -= option.weight;
-    if (roll <= 0) return option.count;
+    if (roll <= 0) return option;
   }
-  return usable.at(-1)?.count ?? 1;
+  return usable.at(-1);
+}
+
+function rollRootCount(options: PrologueConfig["birth"]["rootRoll"]) {
+  return rollWeighted(options)?.count ?? 1;
+}
+
+function uniqueAbilities(ids: string[], catalog: Record<string, LearnedAbility>) {
+  return [...new Set(ids)]
+    .map((id) => catalog[id])
+    .filter((ability): ability is LearnedAbility => Boolean(ability))
+    .map((ability) => ({ ...ability }));
 }
 
 function rootName(template: string, elements: string[]) {
@@ -231,13 +345,17 @@ export function isPrologueConfig(value: unknown): value is PrologueConfig {
       && candidate.birth.elements.length > 0
       && Array.isArray(candidate.birth.rootRoll)
       && candidate.birth.rootRoll.length > 0
+      && candidate.character
+      && Array.isArray(candidate.character.origins)
+      && candidate.character.origins.length > 0
       && candidate.rootProfiles
       && candidate.sideQuests
       && candidate.training
       && Array.isArray(candidate.training.choices)
       && candidate.trial
       && candidate.trial.comparisons
-      && candidate.trial.outcomes,
+      && candidate.trial.outcomes
+      && candidate.worldRules,
   );
 }
 
@@ -245,6 +363,8 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
   const count = rollRootCount(config.birth.rootRoll);
   const profile = config.rootProfiles[String(count)] ?? Object.values(config.rootProfiles)[0];
   if (!profile) throw new Error("序章规则中没有可用的灵根配置。");
+  const originConfig = rollWeighted(config.character.origins);
+  if (!originConfig) throw new Error("序章规则中没有可用的出身配置。");
 
   const elements = shuffledElements(config.birth.elements, count);
   const stats: FiveStats = {
@@ -257,6 +377,7 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
 
   STAT_KEYS.forEach((key) => {
     stats[key] += profile.statBonus[key] ?? 0;
+    stats[key] += originConfig.statBonus[key] ?? 0;
   });
 
   const vitalRules: VitalRules = {
@@ -269,6 +390,29 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
   const vitals = deriveVitals(stats, vitalRules);
   const sideQuest = config.sideQuests[profile.sideQuestId] ?? Object.values(config.sideQuests)[0];
   if (!sideQuest) throw new Error("序章规则中没有可用的支线配置。");
+  const rolledArtId = rollWeighted(originConfig.startingCultivationRoll ?? [])?.id;
+  const cultivationArtIds = [
+    ...config.character.startingCultivationArts,
+    ...(originConfig.startingCultivationArts ?? []),
+    ...(rolledArtId ? [rolledArtId] : []),
+  ];
+  const techniqueIds = [
+    ...config.character.startingTechniques,
+    ...(originConfig.startingTechniques ?? []),
+  ];
+  const inventory = originConfig.startingItems
+    .map((id) => config.character.items[id])
+    .filter((item): item is InventoryItem => Boolean(item))
+    .map((item) => ({
+      ...item,
+      effects: item.effects.map((effect) => ({
+        ...effect,
+        battleBonus: effect.battleBonus ? { ...effect.battleBonus } : undefined,
+      })),
+    }));
+  const hiddenTalent = originConfig.hiddenTalentId
+    ? config.character.hiddenTalents[originConfig.hiddenTalentId]
+    : undefined;
 
   return {
     version: 1,
@@ -284,6 +428,17 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
       reception: profile.reception,
       growth: profile.growth,
     },
+    origin: {
+      id: originConfig.id,
+      name: originConfig.name,
+      description: originConfig.description,
+    },
+    spiritStones: originConfig.spiritStones,
+    inventory,
+    cultivationArts: uniqueAbilities(cultivationArtIds, config.character.cultivationArts),
+    techniques: uniqueAbilities(techniqueIds, config.character.techniques),
+    hiddenTalent: hiddenTalent ? { ...hiddenTalent } : undefined,
+    selectedTrialItemIds: [],
     vitalRules,
     ...vitals,
     currentHealth: vitals.maxHealth,
@@ -324,24 +479,60 @@ export function chooseTraining(life: PrologueLife, choiceId: string, choices: Tr
   };
 }
 
+export function itemWorksInContext(item: InventoryItem, contextId: string) {
+  return item.quantity > 0 && item.effects.some((effect) => effect.contextId === contextId);
+}
+
+export function toggleTrialItem(life: PrologueLife, itemId: string, contextId: string) {
+  const item = life.inventory?.find((candidate) => candidate.id === itemId);
+  if (!item || !itemWorksInContext(item, contextId)) return life;
+  const selected = new Set(life.selectedTrialItemIds ?? []);
+  if (selected.has(itemId)) selected.delete(itemId);
+  else selected.add(itemId);
+  return { ...life, selectedTrialItemIds: [...selected] };
+}
+
 export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): PrologueLife {
   const calculation = rules.calculations;
+  const selectedIds = new Set(life.selectedTrialItemIds ?? []);
+  const applicableItems = (life.inventory ?? [])
+    .map((item) => ({
+      item,
+      effect: item.effects.find((candidate) => candidate.contextId === rules.contextId),
+    }))
+    .filter((entry): entry is { item: InventoryItem; effect: ItemEffect } => (
+      selectedIds.has(entry.item.id) && entry.item.quantity > 0 && Boolean(entry.effect)
+    ));
+  const itemBonus: Partial<Record<TrialComparisonKey, number>> = {};
+  let bonusWins = 0;
+  const forcedOutcomes: BattleReport["outcome"][] = [];
+  applicableItems.forEach(({ effect }) => {
+    (Object.keys(effect.battleBonus ?? {}) as TrialComparisonKey[]).forEach((key) => {
+      itemBonus[key] = (itemBonus[key] ?? 0) + (effect.battleBonus?.[key] ?? 0);
+    });
+    bonusWins += effect.bonusWins ?? 0;
+    if (effect.forceOutcome) forcedOutcomes.push(effect.forceOutcome);
+  });
   const initiative = life.stats.speed
     + Math.floor(life.stats.intelligence / 2)
-    + randomInt(calculation.initiativeRandom.min, calculation.initiativeRandom.max);
+    + randomInt(calculation.initiativeRandom.min, calculation.initiativeRandom.max)
+    + (itemBonus.initiative ?? 0);
   const offense = life.stats.attack
     + Math.floor(life.stats.proficiency / 2)
-    + randomInt(calculation.offenseRandom.min, calculation.offenseRandom.max);
+    + randomInt(calculation.offenseRandom.min, calculation.offenseRandom.max)
+    + (itemBonus.offense ?? 0);
   const guard = life.stats.defense
     + Math.floor(life.stats.speed / 3)
-    + randomInt(calculation.guardRandom.min, calculation.guardRandom.max);
+    + randomInt(calculation.guardRandom.min, calculation.guardRandom.max)
+    + (itemBonus.guard ?? 0);
   const rootBonus = calculation.preferredRootCounts.includes(life.root.count)
     ? calculation.preferredRootBonus
     : calculation.normalRootBonus;
   const technique = life.stats.intelligence
     + Math.floor(life.stats.proficiency / 3)
     + rootBonus
-    + randomInt(calculation.techniqueRandom.min, calculation.techniqueRandom.max);
+    + randomInt(calculation.techniqueRandom.min, calculation.techniqueRandom.max)
+    + (itemBonus.technique ?? 0);
 
   const values: Record<TrialComparisonKey, number> = { initiative, offense, guard, technique };
   const comparisonKeys: TrialComparisonKey[] = ["initiative", "offense", "guard", "technique"];
@@ -352,10 +543,14 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
     verdict: values[key] >= rules.comparisons[key].target ? "占优" : "吃亏",
   }));
 
-  const wins = comparisons.filter((item) => item.player >= item.enemy).length;
-  const outcome: BattleReport["outcome"] = wins >= rules.victoryMinimumWins
+  const wins = comparisons.filter((item) => item.player >= item.enemy).length + bonusWins;
+  let outcome: BattleReport["outcome"] = wins >= rules.victoryMinimumWins
     ? "victory"
     : wins >= rules.closeMinimumWins ? "close" : "defeat";
+  const outcomeRank: Record<BattleReport["outcome"], number> = { defeat: 0, close: 1, victory: 2 };
+  forcedOutcomes.forEach((forced) => {
+    if (outcomeRank[forced] > outcomeRank[outcome]) outcome = forced;
+  });
   const healthLoss = randomInt(rules.healthLoss[outcome].min, rules.healthLoss[outcome].max);
   const spiritLoss = randomInt(rules.spiritLoss.min, rules.spiritLoss.max);
   const battle: BattleReport = {
@@ -363,11 +558,19 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
     comparisons,
     healthAfter: Math.max(1, life.currentHealth - healthLoss),
     spiritAfter: Math.max(0, life.currentSpirit - spiritLoss),
+    usedItems: applicableItems.map(({ item }) => item.name),
+    itemMessages: applicableItems.map(({ effect }) => effect.message),
     ...rules.outcomes[outcome],
   };
 
   const next = {
     ...life,
+    inventory: (life.inventory ?? []).map((item) => {
+      const wasUsed = applicableItems.some((entry) => entry.item.id === item.id);
+      if (!wasUsed || !item.consumable) return item;
+      return { ...item, quantity: Math.max(0, item.quantity - 1) };
+    }),
+    selectedTrialItemIds: [],
     currentHealth: battle.healthAfter,
     currentSpirit: battle.spiritAfter,
     battle,

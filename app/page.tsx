@@ -11,10 +11,12 @@ import {
   chooseTraining,
   type FiveStats,
   isPrologueConfig,
+  itemWorksInContext,
   type PrologueConfig,
   type PrologueLife,
   resolveWoodenTrial,
   rollBirth,
+  toggleTrialItem,
   triggerSideQuest,
 } from "@/lib/prologue";
 import defaultContent from "@/public/游戏内容/界面文字.json";
@@ -110,6 +112,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [life, setLife] = useState<PrologueLife | null>(null);
+  const [itemNotice, setItemNotice] = useState("");
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
 
   useEffect(() => {
@@ -360,14 +363,31 @@ export default function Home() {
     persistLife(chooseTraining(life, choiceId, prologueConfig.training.choices));
   }
 
+  function prepareTrialItem(itemId: string) {
+    const item = life?.inventory?.find((candidate) => candidate.id === itemId);
+    if (!life || !item) return;
+    if (!itemWorksInContext(item, prologueConfig.trial.contextId)) {
+      setItemNotice(prologueConfig.character.uselessItemTemplate.replace("{item}", item.name));
+      return;
+    }
+    const alreadySelected = life.selectedTrialItemIds?.includes(itemId) ?? false;
+    persistLife(toggleTrialItem(life, itemId, prologueConfig.trial.contextId));
+    const template = alreadySelected
+      ? prologueConfig.character.unselectedItemTemplate
+      : prologueConfig.character.usefulItemTemplate;
+    setItemNotice(template.replace("{item}", item.name));
+  }
+
   function startTrial() {
     if (!life?.training) return;
+    setItemNotice("");
     persistLife(resolveWoodenTrial(life, prologueConfig.trial));
   }
 
   function restartLife() {
     if (!session) return;
     localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+    setItemNotice("");
     setLife(null);
   }
 
@@ -463,6 +483,13 @@ export default function Home() {
                 <div className="space-y-6">
                   <div>
                     <p className="leading-8 text-[#b8c5bd]">{life.birthText}</p>
+                    {life.origin && (
+                      <div className="mt-4 rounded-md border border-[#314b40] bg-[#091511] p-4">
+                        <p className="text-sm tracking-[0.16em] text-[#7f9589]">{prologueConfig.character.originResultLabel}</p>
+                        <p className="mt-1 text-lg text-[#e9d9a6]">{life.origin.name}</p>
+                        <p className="mt-2 text-sm leading-6 text-[#9caaa2]">{life.origin.description}</p>
+                      </div>
+                    )}
                     <div className="mt-4 rounded-md border border-[#5a4c2d] bg-[#17170f]/90 p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -598,6 +625,85 @@ export default function Home() {
                 )}
               </section>
 
+              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg text-[#f0dfae]">{prologueConfig.character.assetsTitle}</h2>
+                  <span className="rounded-full border border-[#5f5335] px-3 py-1 font-mono text-sm text-[#e3c873]">
+                    {prologueConfig.character.spiritStoneLabel} {life?.spiritStones ?? 0}
+                  </span>
+                </div>
+                {life ? (
+                  <Tabs defaultValue="inventory" className="mt-4">
+                    <TabsList className="grid w-full grid-cols-3 bg-[#08130f]">
+                      <TabsTrigger value="inventory">{prologueConfig.character.inventoryTab}</TabsTrigger>
+                      <TabsTrigger value="cultivation">{prologueConfig.character.cultivationTab}</TabsTrigger>
+                      <TabsTrigger value="technique">{prologueConfig.character.techniqueTab}</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="inventory" className="mt-4">
+                      {(life.inventory ?? []).some((item) => item.quantity > 0) ? (
+                        <div className="space-y-3">
+                          {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
+                            const selected = life.selectedTrialItemIds?.includes(item.id) ?? false;
+                            const mayPrepare = Boolean(life.training && (!life.battle || life.battle.outcome === "defeat"));
+                            return (
+                              <div key={item.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm text-[#e6d8ad]">{item.name} × {item.quantity}</p>
+                                    <p className="mt-1 text-xs text-[#75887e]">{item.category} · {item.consumable ? "消耗品" : "持有物"}</p>
+                                  </div>
+                                  {mayPrepare && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => prepareTrialItem(item.id)}
+                                      className={selected
+                                        ? "border-[#b99a56] bg-[#3b321c] text-[#f0d78f] hover:bg-[#4a3e22]"
+                                        : "border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"}
+                                    >
+                                      {selected ? prologueConfig.character.selectedItem : prologueConfig.character.selectItem}
+                                    </Button>
+                                  )}
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-[#98a69f]">{item.description}</p>
+                              </div>
+                            );
+                          })}
+                          <p className="text-xs leading-5 text-[#70837a]">{prologueConfig.character.itemUseHint}</p>
+                          {itemNotice && <p className="rounded border border-[#5e4d31] bg-[#201b10] px-3 py-2 text-sm text-[#ddc486]">{itemNotice}</p>}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
+                      )}
+                    </TabsContent>
+                    <TabsContent value="cultivation" className="mt-4 space-y-3">
+                      {(life.cultivationArts ?? []).length > 0 ? (life.cultivationArts ?? []).map((ability) => (
+                        <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-[#e6d8ad]">{ability.name}</p>
+                            <span className="text-xs text-[#b69a63]">{ability.grade}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-[#98a69f]">{ability.description}</p>
+                        </div>
+                      )) : <p className="text-sm text-[#71847a]">{prologueConfig.character.cultivationEmpty}</p>}
+                    </TabsContent>
+                    <TabsContent value="technique" className="mt-4 space-y-3">
+                      {(life.techniques ?? []).length > 0 ? (life.techniques ?? []).map((ability) => (
+                        <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-[#e6d8ad]">{ability.name}</p>
+                            <span className="text-xs text-[#b69a63]">{ability.grade}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-[#98a69f]">{ability.description}</p>
+                        </div>
+                      )) : <p className="text-sm text-[#71847a]">{prologueConfig.character.techniqueEmpty}</p>}
+                    </TabsContent>
+                  </Tabs>
+                ) : (
+                  <p className="mt-4 text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
+                )}
+              </section>
+
               <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
@@ -618,6 +724,13 @@ export default function Home() {
                         </div>
                       ))}
                     </div>
+                    {(life.battle.itemMessages ?? []).length > 0 && (
+                      <div className="mt-3 space-y-1 rounded border border-[#5b4e31] bg-[#1b170e] px-3 py-2">
+                        {life.battle.itemMessages?.map((message) => (
+                          <p key={message} className="text-xs leading-5 text-[#d9c081]">{message}</p>
+                        ))}
+                      </div>
+                    )}
                     <div className={`mt-4 rounded-md border p-4 ${life.battle.outcome === "defeat" ? "border-[#73443b] bg-[#2a1714]" : "border-[#486a58] bg-[#10241c]"}`}>
                       <p className="text-lg text-[#f1dfaa]">{life.battle.title}</p>
                       <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.battle.summary}</p>
@@ -656,6 +769,27 @@ export default function Home() {
                   {copied ? content.world.copiedInvite : content.world.copyInvite}
                 </Button>
                 {error && <p className="mt-3 text-sm text-[#e99580]">{error}</p>}
+                <div className="mt-5 border-t border-[#29443a] pt-4">
+                  <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.death.title}</p>
+                  <p className="mt-2 text-xs leading-5 text-[#7f9288]">{prologueConfig.worldRules.death.summary}</p>
+                </div>
+                <div className="mt-4">
+                  <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.multiplayerTitle}</p>
+                  <div className="mt-2 space-y-2">
+                    {prologueConfig.worldRules.raids.map((raid) => (
+                      <div key={raid.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm text-[#dce4dc]">{raid.name}</p>
+                          <span className="text-xs text-[#b99a60]">{raid.status}</span>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-[#768a80]">{raid.description}</p>
+                        <p className="mt-2 text-xs text-[#60746a]">
+                          {raid.minimumPlayers}–{raid.maximumPlayers} 人 · {raid.unlockRealm}解锁
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </section>
             </aside>
           </div>

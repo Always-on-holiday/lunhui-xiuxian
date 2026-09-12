@@ -28,6 +28,138 @@
       { "count": 5, "weight": 18 }
     ]
   },
+  "character": {
+    "originResultLabel": "出身",
+    "assetsTitle": "行囊与所学",
+    "spiritStoneLabel": "灵石",
+    "inventoryTab": "背包",
+    "cultivationTab": "功法",
+    "techniqueTab": "技法",
+    "inventoryEmpty": "行囊空空。",
+    "cultivationEmpty": "尚未习得功法。",
+    "techniqueEmpty": "尚未掌握技法。",
+    "selectItem": "试炼时使用",
+    "selectedItem": "已备好",
+    "itemUseHint": "木傀试炼前可备好任意数量的道具；只有在此处有效的道具才会加入计算。",
+    "uselessItemTemplate": "「{item}」在这里派不上用场。",
+    "usefulItemTemplate": "「{item}」已加入本次判定。",
+    "unselectedItemTemplate": "已取消使用「{item}」。",
+    "origins": [
+      {
+        "id": "merchant_clan",
+        "weight": 20,
+        "name": "商贾世家",
+        "description": "家中不通仙法，却深谙货殖。你带着一笔远胜常人的启程盘缠。",
+        "statBonus": {},
+        "spiritStones": 30,
+        "startingItems": [],
+        "startingCultivationArts": ["breathing_art"],
+        "startingTechniques": ["foundation_fist"]
+      },
+      {
+        "id": "cultivator_clan",
+        "weight": 12,
+        "name": "修真世家",
+        "description": "族中尚存浅薄传承。启程前，你获准从家藏功法中随机抄录一部。",
+        "statBonus": {},
+        "spiritStones": 5,
+        "startingItems": [],
+        "startingCultivationArts": [],
+        "startingCultivationRoll": [
+          { "id": "breathing_art", "weight": 70 },
+          { "id": "azure_cloud_art", "weight": 30 }
+        ],
+        "startingTechniques": ["foundation_fist"]
+      },
+      {
+        "id": "ordinary_family",
+        "weight": 53,
+        "name": "普通家庭",
+        "description": "父母皆是凡人。没有显赫助力，也没有额外负担，一切从寻常处开始。",
+        "statBonus": {},
+        "spiritStones": 3,
+        "startingItems": ["dry_food", "family_letter"],
+        "startingCultivationArts": ["breathing_art"],
+        "startingTechniques": ["foundation_fist"]
+      },
+      {
+        "id": "nothing_orphan",
+        "weight": 15,
+        "name": "一无所有",
+        "description": "你是没有家世、盘缠与传承的孤儿，山门名册上甚至找不到你的籍贯。",
+        "statBonus": {},
+        "spiritStones": 0,
+        "startingItems": [],
+        "startingCultivationArts": [],
+        "startingTechniques": [],
+        "hiddenTalentId": "unfettered_fate"
+      }
+    ],
+    "startingCultivationArts": [],
+    "startingTechniques": [],
+    "cultivationArts": {
+      "breathing_art": {
+        "id": "breathing_art",
+        "name": "引气诀·残篇",
+        "grade": "低阶",
+        "description": "最基础的吐纳法，只够在锻体阶段辨认灵气。"
+      },
+      "azure_cloud_art": {
+        "id": "azure_cloud_art",
+        "name": "青云养气经",
+        "grade": "中阶",
+        "description": "讲究气息绵长、根基稳固，是小型修真家族也会珍藏的正经传承。"
+      }
+    },
+    "techniques": {
+      "foundation_fist": {
+        "id": "foundation_fist",
+        "name": "青石锻体拳",
+        "grade": "凡阶",
+        "description": "村中流传的粗浅拳架，胜在简单扎实。"
+      }
+    },
+    "items": {
+      "dry_food": {
+        "id": "dry_food",
+        "name": "耐嚼干粮",
+        "category": "杂物",
+        "description": "进阵前填饱肚子，承受反击 +1。",
+        "quantity": 1,
+        "consumable": true,
+        "effects": [
+          {
+            "contextId": "wooden_trial",
+            "message": "你提前吃下干粮，脚下比空腹时更稳。",
+            "battleBonus": { "guard": 1 }
+          }
+        ]
+      },
+      "family_letter": {
+        "id": "family_letter",
+        "name": "家中旧信",
+        "category": "信物",
+        "description": "一封被反复折叠的家书，在木傀面前似乎毫无用处。",
+        "quantity": 1,
+        "consumable": false,
+        "effects": [
+          {
+            "contextId": "ancestral_hall",
+            "message": "旧信上的姓氏与残碑互相印证，暗门悄然开启。",
+            "specialResult": "开启祖祠暗门支线"
+          }
+        ]
+      }
+    },
+    "hiddenTalents": {
+      "unfettered_fate": {
+        "id": "unfettered_fate",
+        "name": "无系之命",
+        "description": "没有家世因果束缚，某些只向无名之人开启的事件会认出你。",
+        "revealCondition": "首次遭遇命定事件后揭示"
+      }
+    }
+  },
   "mainQuest": {
     "title": "锻体境主线 · 叩开仙门",
     "condition": "突破练气前必须完成",
@@ -145,6 +277,7 @@
     ]
   },
   "trial": {
+    "contextId": "wooden_trial",
     "title": "青崖门木傀试炼",
     "description": "你只需决定是否入阵。攻防、先手与应变全部由程序比较，详细过程收在右侧小窗。",
     "riskText": "风险：可能受伤 · 序章保护不会死亡",
@@ -197,5 +330,26 @@
     },
     "defeatBonus": { "proficiency": 1 },
     "successLevel": 2
+  },
+  "worldRules": {
+    "death": {
+      "title": "死亡与世界回退",
+      "summary": "单个玩家死亡时世界继续运行；只有房间内所有玩家都死亡，世界才回退到最近的时间锚点。",
+      "worldContinuesOnPlayerDeath": true,
+      "rewindWhenAllPlayersDead": true,
+      "rewindTarget": "最近时间锚点"
+    },
+    "multiplayerTitle": "多人内容",
+    "raids": [
+      {
+        "id": "mist_ruins",
+        "name": "雾隐遗迹",
+        "description": "需要多人共同判断岔路、分配遗物并迎战遗迹守卫。",
+        "minimumPlayers": 2,
+        "maximumPlayers": 4,
+        "unlockRealm": "练气境",
+        "status": "筹备中"
+      }
+    ]
   }
 }
