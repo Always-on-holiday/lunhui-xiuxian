@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "title": "自由行动规则",
-    "status": "规则骨架完成，等待自由行动引擎接入",
+    "status": "完整判定算法已实现，等待人物与场景内容调用",
     "design": "通用动作 + 对象标签 + 特殊覆写 + 世界后果"
   },
   "interface": {
@@ -14,14 +14,368 @@
     "showExactFormula": false,
     "confirmLethalAndIrreversibleActions": true
   },
+  "algorithm": {
+    "version": 1,
+    "roll": {
+      "minimum": 1,
+      "maximum": 100,
+      "persistAttemptBeforeRoll": true,
+      "deterministicFromAttemptId": true,
+      "preventRefreshReroll": true
+    },
+    "chance": {
+      "formula": "clamp(actionMin, actionMax, baseChance + (actorCheck - targetCheck) * statPointPercent + levelDifference * levelPercent + relation * relationFactor + stateModifier + tagModifier + environmentModifier + abilityBonus + itemBonus + contentModifier + repeatPenalty)",
+      "statPointPercent": 4,
+      "defaultLevelPercent": 2,
+      "levelContributionMinimum": -35,
+      "levelContributionMaximum": 35,
+      "defaultMinimumChance": 5,
+      "defaultMaximumChance": 95,
+      "modifierMinimum": -60,
+      "modifierMaximum": 60,
+      "repeatPenaltyPerAttempt": -10,
+      "repeatPenaltyMaximum": -30,
+      "witnessPenaltyPerPerson": -3,
+      "witnessPenaltyMaximum": -15,
+      "witnessSensitiveActions": ["steal", "rob", "kill", "infringe"]
+    },
+    "outcomes": {
+      "criticalSuccessThreshold": "min(successChance, clamp(5, 30, successChance - 50))",
+      "successThreshold": "successChance",
+      "criticalFailureStart": "clamp(55, 96, successChance + 30)",
+      "order": ["criticalSuccess", "success", "failure", "criticalFailure"]
+    },
+    "preview": {
+      "showChanceAsRange": true,
+      "baseUncertainty": 20,
+      "intelligenceReductionPerPoint": 1,
+      "minimumUncertainty": 5,
+      "maximumUncertainty": 20,
+      "riskByEstimatedChance": [
+        { "minimum": 80, "grade": "low" },
+        { "minimum": 60, "grade": "medium" },
+        { "minimum": 40, "grade": "high" },
+        { "minimum": 20, "grade": "extreme" },
+        { "minimum": 0, "grade": "extreme" }
+      ]
+    },
+    "realmProtection": {
+      "hostileActionLevelGapForWarning": 5,
+      "hostileActionLevelGapForNearCertainDeath": 10,
+      "hostileActionLevelGapForAbsoluteDeath": 20,
+      "nearCertainDeathMaximumChance": 5,
+      "absoluteDeathMaximumChance": 0,
+      "neverHideLethalWarning": true
+    },
+    "resourcePenalties": {
+      "healthBelow25Percent": -10,
+      "spiritBelow25Percent": -10,
+      "physicalActions": ["threaten", "steal", "rob", "attack", "kill", "destroy_item", "destroy_target"],
+      "spiritualActions": ["observe", "talk", "inspect_item", "use_item", "combine_item", "infringe", "search"]
+    },
+    "combatHandoff": {
+      "actions": ["attack", "rob", "kill"],
+      "criticalSuccessInitiativeBonus": 2,
+      "successInitiativeBonus": 1,
+      "failureInitiativeBonus": 0,
+      "criticalFailureInitiativeBonus": -2,
+      "killSetsLethalCombat": true,
+      "singleCheckCannotKillComparableNpc": true
+    },
+    "idempotency": {
+      "requireAttemptId": true,
+      "sameAttemptReturnsSameRoll": true,
+      "applyEffectsOnce": true,
+      "saveResolutionId": true
+    }
+  },
+  "actionProfiles": {
+    "observe": {
+      "mode": "check",
+      "baseChance": 68,
+      "minimumChance": 10,
+      "maximumChance": 95,
+      "actorWeights": { "intelligence": 0.7, "proficiency": 0.3 },
+      "targetWeights": { "intelligence": 0.5, "proficiency": 0.5 },
+      "resistanceTrait": "concealment",
+      "resistanceTraitFactor": 0.5,
+      "levelPercent": 1,
+      "relationFactor": 0
+    },
+    "talk": {
+      "mode": "check",
+      "baseChance": 52,
+      "minimumChance": 5,
+      "maximumChance": 95,
+      "actorWeights": { "intelligence": 0.7, "proficiency": 0.3 },
+      "targetWeights": { "intelligence": 0.7, "proficiency": 0.3 },
+      "resistanceTrait": "willpower",
+      "resistanceTraitFactor": 0.25,
+      "levelPercent": 0.5,
+      "relationFactor": 0.2
+    },
+    "trade": {
+      "mode": "check",
+      "baseChance": 55,
+      "minimumChance": 10,
+      "maximumChance": 95,
+      "actorWeights": { "intelligence": 0.75, "proficiency": 0.25 },
+      "targetWeights": { "intelligence": 0.75, "proficiency": 0.25 },
+      "resistanceTrait": "bargaining",
+      "resistanceTraitFactor": 0.35,
+      "levelPercent": 0,
+      "relationFactor": 0.15
+    },
+    "help": {
+      "mode": "check",
+      "baseChance": 62,
+      "minimumChance": 10,
+      "maximumChance": 95,
+      "actorWeights": { "proficiency": 0.6, "intelligence": 0.4 },
+      "targetWeights": {},
+      "resistanceTrait": "severity",
+      "resistanceTraitFactor": 0.7,
+      "levelPercent": 1,
+      "relationFactor": 0
+    },
+    "threaten": {
+      "mode": "check",
+      "baseChance": 45,
+      "minimumChance": 5,
+      "maximumChance": 90,
+      "actorWeights": { "attack": 0.5, "intelligence": 0.25, "proficiency": 0.25 },
+      "targetWeights": { "defense": 0.35, "intelligence": 0.35, "proficiency": 0.3 },
+      "resistanceTrait": "courage",
+      "resistanceTraitFactor": 0.4,
+      "levelPercent": 2.5,
+      "relationFactor": 0.05
+    },
+    "steal": {
+      "mode": "check",
+      "baseChance": 45,
+      "minimumChance": 3,
+      "maximumChance": 95,
+      "actorWeights": { "speed": 0.6, "intelligence": 0.2, "proficiency": 0.2 },
+      "targetWeights": { "speed": 0.4, "intelligence": 0.3, "proficiency": 0.3 },
+      "resistanceTrait": "alertness",
+      "resistanceTraitFactor": 0.5,
+      "levelPercent": 1.5,
+      "relationFactor": 0
+    },
+    "rob": {
+      "mode": "check_then_combat_on_failure",
+      "baseChance": 45,
+      "minimumChance": 3,
+      "maximumChance": 90,
+      "actorWeights": { "attack": 0.55, "speed": 0.25, "proficiency": 0.2 },
+      "targetWeights": { "defense": 0.55, "attack": 0.25, "speed": 0.2 },
+      "resistanceTrait": "alertness",
+      "resistanceTraitFactor": 0.25,
+      "levelPercent": 2.5,
+      "relationFactor": 0
+    },
+    "attack": {
+      "mode": "combat_entry",
+      "baseChance": 50,
+      "minimumChance": 3,
+      "maximumChance": 95,
+      "actorWeights": { "speed": 0.5, "intelligence": 0.2, "proficiency": 0.3 },
+      "targetWeights": { "speed": 0.5, "intelligence": 0.2, "proficiency": 0.3 },
+      "resistanceTrait": "alertness",
+      "resistanceTraitFactor": 0.35,
+      "levelPercent": 1.5,
+      "relationFactor": 0
+    },
+    "kill": {
+      "mode": "combat_entry",
+      "baseChance": 42,
+      "minimumChance": 1,
+      "maximumChance": 90,
+      "actorWeights": { "attack": 0.45, "speed": 0.35, "proficiency": 0.2 },
+      "targetWeights": { "defense": 0.4, "speed": 0.35, "proficiency": 0.25 },
+      "resistanceTrait": "alertness",
+      "resistanceTraitFactor": 0.4,
+      "levelPercent": 2.5,
+      "relationFactor": 0
+    },
+    "infringe": {
+      "mode": "check",
+      "baseChance": 30,
+      "minimumChance": 1,
+      "maximumChance": 85,
+      "actorWeights": { "proficiency": 0.5, "intelligence": 0.3, "attack": 0.2 },
+      "targetWeights": { "proficiency": 0.4, "intelligence": 0.35, "defense": 0.25 },
+      "resistanceTrait": "willpower",
+      "resistanceTraitFactor": 0.6,
+      "levelPercent": 3,
+      "relationFactor": 0
+    },
+    "inspect_item": {
+      "mode": "check",
+      "baseChance": 68,
+      "minimumChance": 10,
+      "maximumChance": 98,
+      "actorWeights": { "intelligence": 0.7, "proficiency": 0.3 },
+      "targetWeights": {},
+      "resistanceTrait": "complexity",
+      "resistanceTraitFactor": 0.7,
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "use_item": {
+      "mode": "check",
+      "baseChance": 70,
+      "minimumChance": 10,
+      "maximumChance": 98,
+      "actorWeights": { "proficiency": 0.6, "intelligence": 0.4 },
+      "targetWeights": {},
+      "resistanceTrait": "complexity",
+      "resistanceTraitFactor": 0.6,
+      "levelPercent": 0.5,
+      "relationFactor": 0
+    },
+    "eat_item": {
+      "mode": "tag_driven",
+      "baseChance": 55,
+      "minimumChance": 5,
+      "maximumChance": 95,
+      "actorWeights": { "defense": 1 },
+      "targetWeights": {},
+      "resistanceTrait": "toxicity",
+      "resistanceTraitFactor": 0.8,
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "equip_item": {
+      "mode": "check",
+      "baseChance": 85,
+      "minimumChance": 20,
+      "maximumChance": 100,
+      "actorWeights": { "proficiency": 0.7, "intelligence": 0.3 },
+      "targetWeights": {},
+      "resistanceTrait": "complexity",
+      "resistanceTraitFactor": 0.5,
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "combine_item": {
+      "mode": "check",
+      "baseChance": 50,
+      "minimumChance": 5,
+      "maximumChance": 95,
+      "actorWeights": { "proficiency": 0.6, "intelligence": 0.4 },
+      "targetWeights": {},
+      "resistanceTrait": "complexity",
+      "resistanceTraitFactor": 0.8,
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "give_item": {
+      "mode": "check",
+      "baseChance": 65,
+      "minimumChance": 10,
+      "maximumChance": 98,
+      "actorWeights": { "intelligence": 0.7, "proficiency": 0.3 },
+      "targetWeights": { "intelligence": 0.6, "proficiency": 0.4 },
+      "resistanceTrait": "suspicion",
+      "resistanceTraitFactor": 0.35,
+      "levelPercent": 0,
+      "relationFactor": 0.2
+    },
+    "destroy_item": {
+      "mode": "check",
+      "baseChance": 55,
+      "minimumChance": 5,
+      "maximumChance": 98,
+      "actorWeights": { "attack": 0.7, "proficiency": 0.3 },
+      "targetWeights": {},
+      "resistanceTrait": "durability",
+      "resistanceTraitFactor": 0.8,
+      "levelPercent": 1,
+      "relationFactor": 0
+    },
+    "discard_item": {
+      "mode": "fixed",
+      "baseChance": 100,
+      "minimumChance": 100,
+      "maximumChance": 100,
+      "actorWeights": {},
+      "targetWeights": {},
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "search": {
+      "mode": "check",
+      "baseChance": 55,
+      "minimumChance": 5,
+      "maximumChance": 95,
+      "actorWeights": { "intelligence": 0.6, "proficiency": 0.25, "speed": 0.15 },
+      "targetWeights": {},
+      "resistanceTrait": "concealment",
+      "resistanceTraitFactor": 0.7,
+      "levelPercent": 0,
+      "relationFactor": 0
+    },
+    "destroy_target": {
+      "mode": "check",
+      "baseChance": 50,
+      "minimumChance": 3,
+      "maximumChance": 95,
+      "actorWeights": { "attack": 0.6, "proficiency": 0.25, "intelligence": 0.15 },
+      "targetWeights": {},
+      "resistanceTrait": "durability",
+      "resistanceTraitFactor": 0.9,
+      "levelPercent": 1.5,
+      "relationFactor": 0
+    },
+    "leave": {
+      "mode": "fixed",
+      "baseChance": 100,
+      "minimumChance": 100,
+      "maximumChance": 100,
+      "actorWeights": {},
+      "targetWeights": {},
+      "levelPercent": 0,
+      "relationFactor": 0
+    }
+  },
+  "situationalModifiers": {
+    "targetTags": {
+      "friendly": { "talk": 15, "trade": 8, "give_item": 15, "threaten": -10 },
+      "hostile": { "talk": -20, "trade": -30, "steal": -10, "attack": 0 },
+      "merchant": { "trade": 12, "steal": -8 },
+      "guard": { "steal": -20, "rob": -15, "kill": -10 },
+      "wounded": { "help": 18, "rob": 10, "kill": 10, "infringe": 8 },
+      "restrained": { "steal": 25, "rob": 25, "kill": 25, "infringe": 20 },
+      "helpless": { "steal": 40, "rob": 40, "kill": 40, "infringe": 30 },
+      "immortal": { "kill": -95, "infringe": -80 },
+      "important": { "kill": 0, "destroy_item": 0 }
+    },
+    "locationTags": {
+      "safe_zone": { "attack": -15, "rob": -20, "kill": -20, "infringe": -20 },
+      "settlement": { "steal": -10, "rob": -15, "kill": -15, "infringe": -15 },
+      "wilderness": { "search": 8, "steal": 5 },
+      "guarded": { "steal": -20, "rob": -20, "kill": -20, "infringe": -20 },
+      "ruin": { "search": 10, "observe": 5 }
+    },
+    "actorTags": {
+      "injured": { "attack": -10, "rob": -10, "kill": -12, "destroy_target": -10 },
+      "hidden": { "observe": 5, "steal": 15, "attack": 10, "kill": 10 },
+      "wanted": { "talk": -8, "trade": -8, "threaten": 5 },
+      "merchant_background": { "trade": 15 },
+      "medical_training": { "help": 15 },
+      "formation_training": { "use_item": 10, "combine_item": 10, "destroy_target": 5 }
+    }
+  },
   "targetTypes": ["npc", "item", "location", "mechanism", "corpse", "self"],
   "riskGrades": {
-    "none": "无风险",
-    "low": "低风险",
+    "none": "风平浪静",
+    "low": "有惊无险",
     "medium": "中风险",
     "high": "高风险",
-    "extreme": "极高风险",
-    "near_certain_death": "近乎必死"
+    "extreme": "九死一生",
+    "near_certain_death": "十死无生",
+    "absolute_death": "耍起"
   },
   "actions": {
     "observe": {
@@ -207,10 +561,22 @@
     }
   },
   "objectTags": {
-    "npc": ["friendly", "neutral", "hostile", "merchant", "guard", "wounded", "important", "immortal", "witness"],
+    "npc": ["friendly", "neutral", "hostile", "merchant", "guard", "wounded", "restrained", "helpless", "important", "immortal", "witness"],
     "item": ["food", "herb", "toxic", "mineral", "flammable", "weapon", "armor", "accessory", "talisman", "quest_key", "unique", "dangerous", "sentient"],
     "location": ["safe_zone", "settlement", "wilderness", "ruin", "sealed", "flammable", "guarded"],
-    "state": ["alive", "dead", "missing", "controlled", "hostile", "broken", "burning", "looted", "discarded"]
+    "state": ["alive", "dead", "missing", "carried", "intact", "restrained", "helpless", "controlled", "hostile", "broken", "burning", "looted", "discarded"]
+  },
+  "numericTraits": {
+    "concealment": "隐藏信息、陷阱或秘密的难度，建议 0—50",
+    "alertness": "发现偷袭和偷窃的能力，建议 0—50",
+    "willpower": "抵抗交涉、威胁、搜魂和禁制的能力，建议 0—50",
+    "bargaining": "交易与议价能力，建议 0—50",
+    "courage": "抵抗威胁的能力，建议 0—50",
+    "severity": "伤势、机关故障或待解决问题的严重度，建议 0—50",
+    "complexity": "物品鉴定、使用和组合难度，建议 0—50",
+    "toxicity": "直接服用时的危险性，建议 0—50",
+    "durability": "物品、机关或地点的破坏难度，建议 0—50",
+    "suspicion": "接受赠礼或陌生提议时的戒心，建议 0—50"
   },
   "resolutionPriority": [
     "event_override",

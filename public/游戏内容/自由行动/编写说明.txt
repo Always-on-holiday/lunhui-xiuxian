@@ -5,6 +5,8 @@
 
 二、人物最少需要
 - id、名字、境界和等级。
+- 五维 stats；普通同级人物可以先全部填写 10，再按特点增减。
+- traits：只填写真正有区别的抵抗数值，例如 alertness（警觉）、willpower（意志）和 bargaining（议价），建议范围 0—50。
 - tags：商人、守卫、受伤、重要人物等。
 - recommendedActions：当前最值得玩家选择的四个动作。
 - extraActions：收在“更多行动”中的动作。
@@ -12,6 +14,7 @@
 
 三、物品最少需要
 - id、名字、数量、材质和 tags。
+- traits：complexity（复杂度）、toxicity（毒性）、durability（耐久）和 concealment（隐藏度），普通物品建议 0—15。
 - 普通操作自动从规则表继承。
 - 某个场景有奇效时，写“动作@场景”的 override，例如 use_item@ancestral_hall。
 
@@ -20,3 +23,21 @@
 
 五、黑暗行动
 infringe 表示非性化的侵害行为，例如搜魂、禁制、强制契约、夺舍和利益侵占。它应当提供快速但昂贵的路线，并同步因果、心魔、通缉、关系和阵营后果。
+
+六、成功率不用手算
+只需要填写对象五维、等级、关系、标签和 traits。程序会按“自由行动规则.json”中的 actionProfiles 自动比较双方数值。
+
+需要为某个剧情微调时，在 override 中填写 chanceModifier；正数提高成功率，负数降低成功率。只有剧情必须发生时才使用 forceOutcome。
+
+七、覆写名称
+- talk：该动作所有结果的通用覆写。
+- talk.success：只覆写交涉成功。
+- talk@hostile：只在目标带 hostile 标签时覆写。
+- use_item@ancestral_hall：只在祖祠地点使用该物品时覆写。
+
+更具体的覆写优先。示例可以直接复制“内容对象示例.json”。
+
+八、提交前检查
+在项目目录运行 pnpm content:check，检查 JSON、动作引用、权重、主线三条继续路线和物品引用。
+
+运行 pnpm actions:simulate，检查同级观察、交易、偷窃、帮助、破坏物品和越级杀敌的统计概率。

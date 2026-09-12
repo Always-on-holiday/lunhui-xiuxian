@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "version": 1,
+    "title": "自由行动内容对象示例",
+    "loadInGame": false,
+    "instruction": "复制对象后修改 id、文字、数值、标签、推荐动作与特殊覆写。"
+  },
+  "npcs": [
+    {
+      "id": "example_npc",
+      "name": "示例人物",
+      "type": "npc",
+      "level": 5,
+      "stats": { "attack": 10, "defense": 10, "speed": 10, "intelligence": 10, "proficiency": 10 },
+      "baseDifficulty": 10,
+      "relation": 0,
+      "state": "alive",
+      "tags": ["neutral", "important"],
+      "traits": { "concealment": 5, "alertness": 10, "willpower": 10, "bargaining": 0, "courage": 10, "suspicion": 5 },
+      "recommendedActions": ["observe", "talk", "trade", "help"],
+      "extraActions": ["threaten", "steal", "rob", "attack", "kill", "infringe", "leave"],
+      "overrides": {
+        "observe.success": { "message": "你看出了这个人物的一项公开特征。", "effects": [{ "type": "reveal", "field": "public_trait" }] },
+        "talk.success": { "message": "对方愿意继续谈下去。", "nextSystem": "dialogue" },
+        "kill.success": { "message": "你抢到了致死战的先机。", "nextSystem": "combat", "effects": [{ "type": "combat_flag", "id": "lethal", "value": true }] },
+        "kill@dead": { "message": "目标已经死亡，不能重复杀死。", "available": false }
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "example_item",
+      "name": "示例物品",
+      "type": "item",
+      "level": 1,
+      "baseDifficulty": 10,
+      "state": "carried",
+      "tags": ["unique", "quest_key", "flammable"],
+      "traits": { "complexity": 10, "toxicity": 0, "durability": 5, "concealment": 10 },
+      "recommendedActions": ["inspect_item", "use_item", "give_item", "discard_item"],
+      "extraActions": ["eat_item", "equip_item", "combine_item", "destroy_item"],
+      "overrides": {
+        "use_item@example_location": { "chanceModifier": 30, "message": "物品与地点产生了特殊共鸣。", "effects": [{ "type": "set_flag", "id": "example_secret", "value": true }] },
+        "destroy_item.success": { "message": "物品被破坏，主线转入替代路线。", "nextSystem": "mainline_reroute", "effects": [{ "type": "set_state", "value": "broken" }] },
+        "eat_item": { "message": "这件东西不适合食用，尝试没有消耗它。" }
+      }
+    }
+  ],
+  "locations": [
+    {
+      "id": "example_location",
+      "name": "示例地点",
+      "type": "location",
+      "level": 5,
+      "baseDifficulty": 10,
+      "state": "intact",
+      "tags": ["ruin", "sealed"],
+      "traits": { "concealment": 20, "durability": 30, "complexity": 15 },
+      "recommendedActions": ["observe", "search", "leave"],
+      "extraActions": ["destroy_target"],
+      "overrides": {
+        "search.criticalSuccess": { "message": "你发现了普通搜索无法找到的暗层。", "effects": [{ "type": "reveal", "field": "hidden_layer" }] }
+      }
+    }
+  ],
+  "mainlineNodes": [
+    {
+      "id": "example_mainline_node",
+      "title": "示例主线节点",
+      "importantNpcIds": ["example_npc"],
+      "importantItemIds": ["example_item"],
+      "continuationRoutes": {
+        "normal": { "when": ["example_npc_alive"], "next": "normal_next", "lead": "与示例人物继续交涉。" },
+        "hostile": { "when": ["example_npc_dead_or_hostile"], "next": "hostile_next", "lead": "从战利品或尸体线索追查。" },
+        "missed": { "when": ["left_area_or_item_destroyed"], "next": "missed_next", "lead": "通过继承人、地点痕迹或世界流言继续。" }
+      }
+    }
+  ]
+}
