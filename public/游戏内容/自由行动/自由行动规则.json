@@ -1,0 +1,272 @@
+{
+  "meta": {
+    "version": 1,
+    "title": "自由行动规则",
+    "status": "规则骨架完成，等待自由行动引擎接入",
+    "design": "通用动作 + 对象标签 + 特殊覆写 + 世界后果"
+  },
+  "interface": {
+    "recommendedActionLimit": 4,
+    "extraActionsLabel": "更多行动",
+    "alwaysUseAttemptWording": true,
+    "showRiskGrade": true,
+    "showPrimaryStat": true,
+    "showExactFormula": false,
+    "confirmLethalAndIrreversibleActions": true
+  },
+  "targetTypes": ["npc", "item", "location", "mechanism", "corpse", "self"],
+  "riskGrades": {
+    "none": "无风险",
+    "low": "低风险",
+    "medium": "中风险",
+    "high": "高风险",
+    "extreme": "极高风险",
+    "near_certain_death": "近乎必死"
+  },
+  "actions": {
+    "observe": {
+      "name": "尝试观察",
+      "targets": ["npc", "item", "location", "mechanism", "corpse"],
+      "defaultStat": "intelligence",
+      "defaultRisk": "low",
+      "cost": { "worldMinutes": 5 },
+      "fallback": "你仔细观察了一阵，没有发现更多异常。"
+    },
+    "talk": {
+      "name": "尝试交涉",
+      "targets": ["npc"],
+      "defaultStat": "intelligence",
+      "defaultRisk": "medium",
+      "cost": { "worldMinutes": 10 },
+      "fallback": "对方听完了你的话，但暂时没有改变主意。"
+    },
+    "trade": {
+      "name": "尝试交易",
+      "targets": ["npc"],
+      "defaultStat": "intelligence",
+      "defaultRisk": "low",
+      "cost": { "worldMinutes": 10 },
+      "fallback": "对方没有看中你拿出的东西。"
+    },
+    "help": {
+      "name": "尝试帮助",
+      "targets": ["npc"],
+      "defaultStat": "proficiency",
+      "defaultRisk": "medium",
+      "cost": { "worldMinutes": 15 },
+      "fallback": "你的好意没有解决眼前的问题，但对方记住了这件事。"
+    },
+    "threaten": {
+      "name": "尝试威胁",
+      "targets": ["npc"],
+      "defaultStat": "attack",
+      "defaultRisk": "high",
+      "cost": { "worldMinutes": 5 },
+      "consequences": ["relation_loss", "witness_risk", "reputation_change"],
+      "fallback": "对方没有屈服，并开始提防你。"
+    },
+    "steal": {
+      "name": "尝试偷窃",
+      "targets": ["npc", "location", "corpse"],
+      "defaultStat": "speed",
+      "defaultRisk": "high",
+      "cost": { "worldMinutes": 5 },
+      "consequences": ["witness_risk", "wanted_risk", "reputation_change"],
+      "fallback": "你没有找到安全的下手机会。"
+    },
+    "rob": {
+      "name": "尝试抢夺",
+      "targets": ["npc"],
+      "defaultStat": "attack",
+      "defaultRisk": "high",
+      "cost": { "worldMinutes": 5 },
+      "consequences": ["combat_risk", "relation_loss", "karma_loss", "wanted_risk"],
+      "fallback": "抢夺立刻演变成了正面冲突。"
+    },
+    "attack": {
+      "name": "尝试攻击",
+      "targets": ["npc", "mechanism"],
+      "defaultStat": "attack",
+      "defaultRisk": "high",
+      "cost": { "worldMinutes": 1 },
+      "consequences": ["combat", "relation_loss", "witness_risk"],
+      "fallback": "你的敌意已经暴露，目标进入战斗状态。"
+    },
+    "kill": {
+      "name": "尝试杀死",
+      "targets": ["npc"],
+      "defaultStat": "attack",
+      "defaultRisk": "extreme",
+      "cost": { "worldMinutes": 1 },
+      "confirm": true,
+      "consequences": ["combat", "permanent_npc_state", "karma_loss", "wanted_risk", "mainline_reroute"],
+      "fallback": "杀意一旦显露，双方将不再按普通交涉处理。"
+    },
+    "infringe": {
+      "name": "尝试侵害",
+      "description": "非性化黑暗行动：搜魂、种下禁制、强制契约、夺舍或侵占利益。",
+      "targets": ["npc"],
+      "defaultStat": "proficiency",
+      "defaultRisk": "extreme",
+      "cost": { "spirit": 8, "worldMinutes": 10 },
+      "confirm": true,
+      "consequences": ["relation_loss", "karma_loss", "heart_demon_risk", "wanted_risk", "faction_change", "mainline_reroute"],
+      "fallback": "目标抵抗了你的侵害，并将你视为不可调和的敌人。"
+    },
+    "inspect_item": {
+      "name": "尝试鉴定",
+      "targets": ["item"],
+      "defaultStat": "intelligence",
+      "defaultRisk": "low",
+      "cost": { "worldMinutes": 5 },
+      "fallback": "你确认了它的材质，却没看出隐藏用途。"
+    },
+    "use_item": {
+      "name": "尝试使用",
+      "targets": ["item"],
+      "requiresSecondaryTarget": true,
+      "defaultStat": "proficiency",
+      "defaultRisk": "medium",
+      "fallback": "它在当前对象或场景上没有产生作用，物品没有消耗。"
+    },
+    "eat_item": {
+      "name": "尝试吃掉",
+      "targets": ["item"],
+      "defaultStat": "defense",
+      "defaultRisk": "medium",
+      "fallbackByTag": {
+        "food": "你吃下它，至少暂时不再饥饿。",
+        "herb": "未经处理的药性直接冲入体内，结果取决于体质与药性。",
+        "toxic": "入口的瞬间你便察觉不对。",
+        "mineral": "它根本无法下咽，强行尝试只会伤到牙齿。",
+        "quest_key": "某种直觉阻止你吞下这件关键物。"
+      }
+    },
+    "equip_item": {
+      "name": "尝试装备",
+      "targets": ["item"],
+      "defaultStat": "proficiency",
+      "defaultRisk": "low",
+      "requiredAnyTag": ["weapon", "armor", "accessory", "talisman"],
+      "fallback": "这件东西没有合适的装备方式，只能继续携带。"
+    },
+    "combine_item": {
+      "name": "尝试组合",
+      "targets": ["item"],
+      "requiresSecondaryTarget": true,
+      "defaultStat": "proficiency",
+      "defaultRisk": "medium",
+      "fallback": "两件东西无法稳定结合，均被原样收回。"
+    },
+    "give_item": {
+      "name": "尝试赠送",
+      "targets": ["item"],
+      "requiresSecondaryTargetType": "npc",
+      "defaultStat": "intelligence",
+      "defaultRisk": "low",
+      "fallback": "对方没有收下这件东西。"
+    },
+    "destroy_item": {
+      "name": "尝试破坏",
+      "targets": ["item"],
+      "defaultStat": "attack",
+      "defaultRisk": "medium",
+      "confirmWhenTags": ["quest_key", "unique", "dangerous"],
+      "fallback": "它比看上去坚固，破坏尝试没有成功。"
+    },
+    "discard_item": {
+      "name": "扔掉",
+      "targets": ["item"],
+      "defaultRisk": "none",
+      "confirmWhenTags": ["quest_key", "unique"],
+      "createsWorldDrop": true,
+      "fallback": "你把它留在了当前地点。只要没有被别人捡走，之后仍可能找回。"
+    },
+    "search": {
+      "name": "尝试搜索",
+      "targets": ["location", "mechanism", "corpse"],
+      "defaultStat": "intelligence",
+      "defaultRisk": "medium",
+      "cost": { "worldMinutes": 15 },
+      "fallback": "你搜索了一遍，没有发现值得带走的东西。"
+    },
+    "destroy_target": {
+      "name": "尝试破坏",
+      "targets": ["location", "mechanism"],
+      "defaultStat": "attack",
+      "defaultRisk": "high",
+      "confirm": true,
+      "consequences": ["world_state_change", "noise", "witness_risk"],
+      "fallback": "目标受到了损伤，但没有完全失去作用。"
+    },
+    "leave": {
+      "name": "离开",
+      "targets": ["npc", "location", "mechanism", "corpse"],
+      "defaultRisk": "none",
+      "fallback": "你没有继续干涉，转身离开。"
+    }
+  },
+  "objectTags": {
+    "npc": ["friendly", "neutral", "hostile", "merchant", "guard", "wounded", "important", "immortal", "witness"],
+    "item": ["food", "herb", "toxic", "mineral", "flammable", "weapon", "armor", "accessory", "talisman", "quest_key", "unique", "dangerous", "sentient"],
+    "location": ["safe_zone", "settlement", "wilderness", "ruin", "sealed", "flammable", "guarded"],
+    "state": ["alive", "dead", "missing", "controlled", "hostile", "broken", "burning", "looted", "discarded"]
+  },
+  "resolutionPriority": [
+    "event_override",
+    "object_override",
+    "tag_combination",
+    "action_fallback",
+    "common_sense_fallback"
+  ],
+  "fallbackGrades": {
+    "no_effect": { "consumeItem": false, "applyCost": false },
+    "failed_attempt": { "consumeItem": false, "applyCost": true },
+    "paid_price": { "consumeItem": "by_rule", "applyCost": true },
+    "unexpected_discovery": { "consumeItem": "by_rule", "applyCost": true },
+    "hidden_special": { "consumeItem": "by_override", "applyCost": true }
+  },
+  "consequenceAxes": {
+    "relation": { "minimum": -100, "maximum": 100, "default": 0 },
+    "reputation": { "minimum": -100, "maximum": 100, "default": 0 },
+    "karma": { "minimum": -100, "maximum": 100, "default": 0 },
+    "wanted": { "minimum": 0, "maximum": 5, "default": 0 },
+    "heartDemon": { "minimum": 0, "maximum": 100, "default": 0 },
+    "witnesses": { "type": "entity_id_list" },
+    "factionStanding": { "type": "faction_score_map" }
+  },
+  "mainlineSafety": {
+    "allowImportantNpcDeath": true,
+    "allowImportantItemDestruction": true,
+    "preventSilentDeadEnds": true,
+    "requiredContinuationRoutes": ["normal", "hostile", "missed"],
+    "fallbackCarriers": ["loot", "corpse_clue", "soul_search", "letter", "successor", "location_clue", "world_rumor"],
+    "alwaysShowNextLead": true
+  },
+  "examples": {
+    "npc_zhang_san": {
+      "targetType": "npc",
+      "tags": ["neutral", "merchant", "witness"],
+      "recommendedActions": ["observe", "talk", "trade", "attack"],
+      "extraActions": ["threaten", "steal", "rob", "kill", "infringe", "leave"],
+      "overrides": {
+        "trade": "打开张三的货物与议价界面。",
+        "kill.success": "张三死亡，货物成为战利品，附近目击者与商会关系同步变化。",
+        "kill.failure": "张三呼救并逃向村口，守卫进入警戒状态。",
+        "infringe.success": "你以禁制强行逼问情报，得到线索，同时增加因果、心魔与通缉风险。"
+      }
+    },
+    "family_letter": {
+      "targetType": "item",
+      "tags": ["quest_key", "unique", "flammable"],
+      "recommendedActions": ["inspect_item", "use_item", "give_item", "discard_item"],
+      "extraActions": ["eat_item", "combine_item", "destroy_item"],
+      "overrides": {
+        "use_item@ancestral_hall": "姓氏与残碑互相印证，祖祠暗门开启。",
+        "eat_item": "纸张无法充饥，墨味让你立刻吐了出来，家书没有消耗。",
+        "destroy_item.success": "旧信化为灰烬，正常祖祠入口永久关闭，但可能开启灰烬辨字路线。",
+        "discard_item": "旧信留在当前地点；其他玩家或 NPC 可以捡到它。"
+      }
+    }
+  }
+}
