@@ -203,6 +203,7 @@ export type PrologueConfig = {
       title: string;
       summary: string;
       worldContinuesOnPlayerDeath: boolean;
+      playerReincarnatesInSameWorld: boolean;
       rewindWhenAllPlayersDead: boolean;
       rewindTarget: string;
     };
