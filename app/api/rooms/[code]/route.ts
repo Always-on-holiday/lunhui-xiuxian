@@ -18,7 +18,7 @@ async function loadRoom(code: string) {
   if (!room) return null;
 
   const result = await env.DB.prepare(
-    "SELECT id, name, is_host AS isHost, joined_at AS joinedAt FROM players WHERE room_code = ? ORDER BY is_host DESC, joined_at ASC"
+    "SELECT id, name, is_host AS isHost, joined_at AS joinedAt FROM players WHERE room_code = ? AND left_at IS NULL ORDER BY is_host DESC, joined_at ASC"
   ).bind(code).all<{ id: string; name: string; isHost: number; joinedAt: string }>();
 
   const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(room.createdAt)) / 60000));
@@ -66,16 +66,24 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const existing = await env.DB.prepare(
-      "SELECT id FROM players WHERE room_code = ? AND name = ?"
-    ).bind(code, name).first<{ id: string }>();
+      "SELECT id, left_at AS leftAt FROM players WHERE room_code = ? AND name = ?"
+    ).bind(code, name).first<{ id: string; leftAt: string | null }>();
     if (existing) {
+      if (existing.leftAt !== null) {
+        const resumed = await env.DB.prepare(
+          "UPDATE players SET left_at = NULL WHERE id = ? AND (SELECT COUNT(*) FROM players WHERE room_code = ? AND left_at IS NULL) < 4"
+        ).bind(existing.id, code).run();
+        if ((resumed.meta.changes ?? 0) !== 1) {
+          return Response.json({ error: "这个世界已经有四位修士。" }, { status: 409 });
+        }
+      }
       return Response.json({ code, playerId: existing.id, resumed: true });
     }
 
     const playerId = crypto.randomUUID();
     const now = new Date().toISOString();
     const joined = await env.DB.prepare(
-      "INSERT INTO players (id, room_code, name, is_host, joined_at) SELECT ?, ?, ?, 0, ? WHERE (SELECT COUNT(*) FROM players WHERE room_code = ?) < 4"
+      "INSERT INTO players (id, room_code, name, is_host, joined_at) SELECT ?, ?, ?, 0, ? WHERE (SELECT COUNT(*) FROM players WHERE room_code = ? AND left_at IS NULL) < 4"
     ).bind(playerId, code, name, now, code).run();
 
     if ((joined.meta.changes ?? 0) !== 1) {
@@ -97,7 +105,9 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (!playerId) {
       return Response.json({ error: "缺少角色凭证。" }, { status: 400 });
     }
-    await env.DB.prepare("DELETE FROM players WHERE room_code = ? AND id = ?").bind(code, playerId).run();
+    await env.DB.prepare(
+      "UPDATE players SET left_at = ? WHERE room_code = ? AND id = ?"
+    ).bind(new Date().toISOString(), code, playerId).run();
     return Response.json({ ok: true });
   } catch (error) {
     console.error("leave room failed", error);
