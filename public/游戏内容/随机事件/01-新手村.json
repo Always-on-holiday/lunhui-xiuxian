@@ -1,0 +1,493 @@
+{
+  "meta": {
+    "version": 1,
+    "stageId": 1,
+    "title": "第一阶段：新手村",
+    "status": "内容配置完成，等待事件引擎接入",
+    "notes": "本阶段不启用战斗经验、闭关、丹药与支线。"
+  },
+  "stage": {
+    "name": "青石村",
+    "realm": "锻体境",
+    "levelRange": [1, 10],
+    "randomEventPoolSize": 10,
+    "randomEncountersPerLife": 6,
+    "sideQuestsEnabled": false,
+    "completion": {
+      "requiredMainlineId": "village_main_departure",
+      "setLevel": 10,
+      "nextStageHint": "离开青石村，踏上真正的修行路。"
+    }
+  },
+  "display": {
+    "mode": "single_page_scene",
+    "replaceCurrentSceneAfterResolution": true,
+    "sendResolvedSceneToHistory": true,
+    "showRiskBeforeChoice": true,
+    "showExactDifficulty": false,
+    "showCalculationInSideWindow": true
+  },
+  "statLabels": {
+    "attack": "攻击",
+    "defense": "防御",
+    "speed": "速度",
+    "intelligence": "智力",
+    "proficiency": "熟练度"
+  },
+  "riskGrades": {
+    "none": { "label": "无风险", "difficulty": null },
+    "low": { "label": "低风险", "difficulty": 10 },
+    "medium": { "label": "中风险", "difficulty": 12 },
+    "high": { "label": "高风险", "difficulty": 14 },
+    "extreme": { "label": "极高风险", "difficulty": 16 }
+  },
+  "mainlineProgression": [
+    {
+      "id": "village_main_birth",
+      "order": 1,
+      "title": "呱呱坠地",
+      "trigger": { "type": "life_start" },
+      "setLevel": 1,
+      "guidance": "完成出身、五维与灵根 Roll 点。",
+      "completionFlag": "main_birth_complete"
+    },
+    {
+      "id": "village_main_trial",
+      "order": 2,
+      "title": "叩开仙门",
+      "trigger": { "type": "flag", "id": "main_birth_complete", "value": true },
+      "setLevel": 2,
+      "guidance": "完成童年选择，并通过木傀试炼。",
+      "completionFlag": "main_trial_complete"
+    },
+    {
+      "id": "village_main_bell",
+      "order": 3,
+      "title": "夜半钟鸣",
+      "trigger": { "type": "random_events_resolved", "count": 2 },
+      "setLevel": 4,
+      "guidance": "两次经历之后，村外废弃道观忽然传出钟声。前去查明。",
+      "completionFlag": "main_bell_complete"
+    },
+    {
+      "id": "village_main_mountain_rite",
+      "order": 4,
+      "title": "山魈祭",
+      "trigger": { "type": "random_events_resolved", "count": 4 },
+      "setLevel": 7,
+      "guidance": "异响引来了山中妖物。守住村口，或找出它畏惧的东西。",
+      "completionFlag": "main_mountain_rite_complete"
+    },
+    {
+      "id": "village_main_departure",
+      "order": 5,
+      "title": "离开青石村",
+      "trigger": { "type": "random_events_resolved", "count": 6 },
+      "setLevel": 10,
+      "guidance": "新手村阶段完成。整理所得，选择离村方向。",
+      "completionFlag": "stage_01_complete"
+    }
+  ],
+  "itemDefinitions": {
+    "wild_herb": {
+      "id": "wild_herb",
+      "name": "带露野药",
+      "category": "材料",
+      "description": "药性尚浅，却胜在新鲜。",
+      "consumable": true,
+      "effects": [
+        { "contextId": "event_wounded_cultivator", "checkBonus": 2, "message": "野药暂时稳住了散修的伤势。" }
+      ]
+    },
+    "iron_token": {
+      "id": "iron_token",
+      "name": "铁匠铺旧牌",
+      "category": "信物",
+      "description": "边角磨得发亮，背面刻着一个模糊的山字。",
+      "consumable": false,
+      "effects": [
+        { "contextId": "event_broken_stone_gate", "checkBonus": 1, "message": "旧牌与石门凹槽竟能勉强吻合。" }
+      ]
+    },
+    "spirit_fish_scale": {
+      "id": "spirit_fish_scale",
+      "name": "青鳞",
+      "category": "材料",
+      "description": "离水之后仍有一丝凉意。",
+      "consumable": false,
+      "effects": [
+        { "contextId": "event_dry_well", "checkBonus": 1, "message": "青鳞映出井壁上肉眼难见的水纹。" }
+      ]
+    },
+    "repellent_incense": {
+      "id": "repellent_incense",
+      "name": "驱虫香",
+      "category": "消耗品",
+      "description": "味道呛鼻，田间虫豸尤其厌恶。",
+      "consumable": true,
+      "effects": [
+        { "contextId": "event_field_pests", "forceOutcome": "criticalSuccess", "message": "虫群闻到烟气，顷刻间散得一干二净。" }
+      ]
+    },
+    "bronze_talisman": {
+      "id": "bronze_talisman",
+      "name": "旧铜符",
+      "category": "护身物",
+      "description": "看似普通，月光下却会浮出细纹。",
+      "consumable": true,
+      "effects": [
+        { "contextId": "event_night_cry", "checkBonus": 3, "message": "铜符骤然发热，替你挡住了一缕阴气。" }
+      ]
+    },
+    "cultivator_bundle": {
+      "id": "cultivator_bundle",
+      "name": "散修的小包袱",
+      "category": "包裹",
+      "description": "主人答应伤好后再来取，最好不要私自打开。",
+      "consumable": false,
+      "effects": [
+        { "contextId": "event_traveling_merchant", "specialResult": "商人认出了包袱上的旧纹章。", "message": "商人的笑容忽然认真了几分。" }
+      ]
+    },
+    "stone_gate_fragment": {
+      "id": "stone_gate_fragment",
+      "name": "残门石片",
+      "category": "奇物",
+      "description": "握在手里时，隐约能听见极远处的潮声。",
+      "consumable": false,
+      "effects": [
+        { "contextId": "stage_02_entry", "specialResult": "解锁第二阶段隐藏入口", "message": "石片指向了官道之外的一条旧路。" }
+      ]
+    }
+  },
+  "randomEvents": [
+    {
+      "id": "village_herb_001",
+      "title": "药婆缺草",
+      "levelRange": [1, 3],
+      "weight": 12,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["采集", "村民"],
+      "intro": "药婆的药篓空了一角。她说山坡上少了一味带银边的草，愿用两块灵石换你跑一趟。",
+      "choices": [
+        {
+          "id": "search_by_leaf",
+          "text": "按叶脉和气味寻找",
+          "risk": { "grade": "low", "primaryStat": "intelligence", "failureHint": "可能误采毒草并损失气血" },
+          "resolution": { "mode": "check", "stat": "intelligence", "difficulty": 10, "contextId": "event_herb_search" },
+          "outcomes": {
+            "criticalFailure": { "text": "你把刺藤当成了药草，手掌肿得像馒头。", "effects": [{ "type": "health", "operation": "add", "value": -5 }] },
+            "failure": { "text": "忙到天黑也只认出几株凡草。药婆仍给了你一点辛苦钱。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 1 }] },
+            "success": { "text": "银边在暮色里一闪。你带回了足够的药草。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 2 }, { "type": "item", "operation": "add", "id": "wild_herb", "quantity": 1 }] },
+            "criticalSuccess": { "text": "你不仅找到了银边草，还辨出了一株被遮住的伴生药。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 3 }, { "type": "item", "operation": "add", "id": "wild_herb", "quantity": 2 }, { "type": "stat", "operation": "add", "stat": "intelligence", "value": 1 }] }
+          }
+        },
+        {
+          "id": "decline",
+          "text": "今日另有安排",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "不会获得报酬" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "药婆摆摆手，自己背起了药篓。", "effects": [] }
+        }
+      ]
+    },
+    {
+      "id": "village_smith_002",
+      "title": "铁匠试锤",
+      "levelRange": [1, 4],
+      "weight": 11,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["锻体", "村民"],
+      "intro": "铁匠把一柄小锤丢到你脚边：锻体不是比谁喊得响，先把这块废铁打直。",
+      "choices": [
+        {
+          "id": "steady_hammer",
+          "text": "稳住下盘，一锤一锤地敲",
+          "risk": { "grade": "low", "primaryStat": "attack", "failureHint": "脱力会损失气血" },
+          "resolution": { "mode": "check", "stat": "attack", "difficulty": 10, "contextId": "event_smith_hammer" },
+          "outcomes": {
+            "criticalFailure": { "text": "锤头擦着脚尖砸下，你狼狈地坐进煤灰里。", "effects": [{ "type": "health", "operation": "add", "value": -4 }] },
+            "failure": { "text": "废铁依旧歪着，铁匠却肯定了你没有偷懒。", "effects": [{ "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }] },
+            "success": { "text": "火星迸开，废铁终于被你敲得平直。", "effects": [{ "type": "stat", "operation": "add", "stat": "attack", "value": 1 }, { "type": "spiritStones", "operation": "add", "value": 1 }] },
+            "criticalSuccess": { "text": "最后一锤落下，铁片发出清越回响。铁匠从抽屉里取出一块旧牌。", "effects": [{ "type": "stat", "operation": "add", "stat": "attack", "value": 1 }, { "type": "item", "operation": "add", "id": "iron_token", "quantity": 1 }] }
+          }
+        },
+        {
+          "id": "watch_first",
+          "text": "先看铁匠如何落锤",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "收益较少" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "你记住了发力的节奏。", "effects": [{ "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }] }
+        }
+      ]
+    },
+    {
+      "id": "village_fortune_003",
+      "title": "村口算命摊",
+      "levelRange": [1, 4],
+      "weight": 9,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["命数", "隐藏天赋"],
+      "intro": "一个瞎眼道人拦住你，说只收一块灵石，便能讲出你命里最缺的东西。",
+      "choices": [
+        {
+          "id": "hear_fortune",
+          "text": "付钱听他说完",
+          "requirements": [{ "type": "spiritStones", "minimum": 1 }],
+          "costs": [{ "type": "spiritStones", "operation": "add", "value": -1 }],
+          "risk": { "grade": "medium", "primaryStat": "intelligence", "failureHint": "可能只听到一通套话" },
+          "resolution": { "mode": "check", "stat": "intelligence", "difficulty": 12, "contextId": "event_fortune_stall" },
+          "modifiers": [
+            { "when": { "hiddenTalentId": "unfettered_fate" }, "difficultyDelta": -3, "hidden": true }
+          ],
+          "outcomes": {
+            "criticalFailure": { "text": "道人说得天花乱坠，你离开后才发现钱袋还少了一块灵石。", "effects": [{ "type": "spiritStones", "operation": "add", "value": -1 }] },
+            "failure": { "text": "所谓批命，不过是几句人人都能套上的吉话。", "effects": [] },
+            "success": { "text": "道人点出你近日心境的破绽，你听后若有所悟。", "effects": [{ "type": "stat", "operation": "add", "stat": "intelligence", "value": 1 }] },
+            "criticalSuccess": { "text": "道人握住你的手腕，低声说：无系之人，不必向旧因果低头。", "effects": [{ "type": "flag", "operation": "set", "id": "unfettered_fate_revealed", "value": true }, { "type": "stat", "operation": "add", "stat": "intelligence", "value": 1 }] }
+          }
+        },
+        {
+          "id": "walk_away",
+          "text": "不理会他",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "不会损失灵石" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "道人在身后笑了一声，没有再追。", "effects": [] }
+        }
+      ]
+    },
+    {
+      "id": "village_fish_004",
+      "title": "山溪灵鱼",
+      "levelRange": [2, 5],
+      "weight": 10,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["山溪", "奇物"],
+      "intro": "浅溪里闪过一道青光。那尾鱼跃出水面时，周围的灵气也跟着荡了一下。",
+      "choices": [
+        {
+          "id": "catch_fish",
+          "text": "踩着湿石追上去",
+          "risk": { "grade": "medium", "primaryStat": "speed", "failureHint": "可能滑倒受伤" },
+          "resolution": { "mode": "check", "stat": "speed", "difficulty": 12, "contextId": "event_spirit_fish" },
+          "outcomes": {
+            "criticalFailure": { "text": "脚下一滑，你顺着溪水滚出老远。", "effects": [{ "type": "health", "operation": "add", "value": -6 }] },
+            "failure": { "text": "鱼尾一摆便没了踪影，只留下一片普通鳞片。", "effects": [] },
+            "success": { "text": "你没有抓鱼，只在它跃起时接住了一枚自然脱落的青鳞。", "effects": [{ "type": "item", "operation": "add", "id": "spirit_fish_scale", "quantity": 1 }] },
+            "criticalSuccess": { "text": "你跟着灵鱼的路线踏过溪石，竟悟出了一套轻盈步法。", "effects": [{ "type": "item", "operation": "add", "id": "spirit_fish_scale", "quantity": 1 }, { "type": "stat", "operation": "add", "stat": "speed", "value": 1 }] }
+          }
+        },
+        {
+          "id": "observe_flow",
+          "text": "不惊动它，观察水流",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "不会获得青鳞" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "水流绕石而行，你对借力有了朦胧认识。", "effects": [{ "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }] }
+        }
+      ]
+    },
+    {
+      "id": "village_pests_005",
+      "title": "灵田虫灾",
+      "levelRange": [3, 6],
+      "weight": 11,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["灵田", "五行"],
+      "intro": "村东灵田爬满灰白小虫。再拖半日，今年本就不多的灵谷便要颗粒无收。",
+      "choices": [
+        {
+          "id": "remove_pests",
+          "text": "辨清虫群习性后动手",
+          "risk": { "grade": "medium", "primaryStat": "proficiency", "failureHint": "处理不当会伤到灵谷" },
+          "resolution": { "mode": "check", "stat": "proficiency", "difficulty": 12, "contextId": "event_field_pests" },
+          "modifiers": [
+            { "when": { "rootElement": "木" }, "difficultyDelta": -1, "preview": "木灵根：更容易感知灵谷状态" },
+            { "when": { "rootElement": "火" }, "checkBonus": 1, "preview": "火灵根：能逼退畏热虫群" }
+          ],
+          "outcomes": {
+            "criticalFailure": { "text": "虫没有除净，几株灵谷反倒先蔫了。", "effects": [{ "type": "spirit", "operation": "add", "value": -4 }] },
+            "failure": { "text": "你保住了一半田地，老农仍叹着气向你道谢。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 1 }] },
+            "success": { "text": "虫群被逐出田垄，灵谷重新挺起了叶片。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 3 }] },
+            "criticalSuccess": { "text": "你找到虫巢并一次清净，老农把剩下的驱虫香全送给了你。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 4 }, { "type": "item", "operation": "add", "id": "repellent_incense", "quantity": 1 }] }
+          }
+        },
+        {
+          "id": "call_others",
+          "text": "去村里喊人帮忙",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "收益较少" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "人多之后，总算赶在天黑前保住了一部分灵谷。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 1 }] }
+        }
+      ]
+    },
+    {
+      "id": "village_merchant_006",
+      "title": "行脚商人",
+      "levelRange": [3, 7],
+      "weight": 10,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["交易", "出身"],
+      "intro": "货郎推着一辆吱呀作响的小车进村，车上真货假货混在一起，全凭眼力。",
+      "choices": [
+        {
+          "id": "inspect_goods",
+          "text": "从杂货里挑一件真正有灵气的",
+          "requirements": [{ "type": "spiritStones", "minimum": 2 }],
+          "costs": [{ "type": "spiritStones", "operation": "add", "value": -2 }],
+          "risk": { "grade": "medium", "primaryStat": "intelligence", "failureHint": "可能买到普通旧货" },
+          "resolution": { "mode": "check", "stat": "intelligence", "difficulty": 12, "contextId": "event_traveling_merchant" },
+          "modifiers": [
+            { "when": { "originId": "merchant_clan" }, "difficultyDelta": -2, "preview": "商贾世家：熟悉货色与话术" }
+          ],
+          "outcomes": {
+            "criticalFailure": { "text": "货郎笑得满面春风，你带走的却只是一块刷亮的废铜。", "effects": [] },
+            "failure": { "text": "东西不算灵物，好歹做工结实，还能转手换回一块灵石。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 1 }] },
+            "success": { "text": "你从旧物堆里翻出一枚月下显纹的铜符。", "effects": [{ "type": "item", "operation": "add", "id": "bronze_talisman", "quantity": 1 }] },
+            "criticalSuccess": { "text": "你看穿了货郎的试探，最终用最低价格拿下铜符，还让他倒找一块灵石。", "effects": [{ "type": "item", "operation": "add", "id": "bronze_talisman", "quantity": 1 }, { "type": "spiritStones", "operation": "add", "value": 1 }] }
+          }
+        },
+        {
+          "id": "sell_news",
+          "text": "不买东西，只同他交换消息",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "不会获得物品" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "货郎提起后山石门，说近日有人听见门后传来潮声。", "effects": [{ "type": "flag", "operation": "set", "id": "heard_stone_gate_rumor", "value": true }] }
+        }
+      ]
+    },
+    {
+      "id": "village_night_cry_007",
+      "title": "夜路哭声",
+      "levelRange": [4, 7],
+      "weight": 8,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["夜晚", "危险"],
+      "intro": "月色惨白，回村的小路旁传来孩童哭声。你举灯靠近，却看不见半个人影。",
+      "choices": [
+        {
+          "id": "follow_voice",
+          "text": "循声查看",
+          "risk": { "grade": "high", "primaryStat": "defense", "failureHint": "可能受到阴气侵蚀" },
+          "resolution": { "mode": "check", "stat": "defense", "difficulty": 14, "contextId": "event_night_cry" },
+          "outcomes": {
+            "criticalFailure": { "text": "哭声骤然贴到耳边。你昏倒在路旁，醒来时已过了一夜。", "effects": [{ "type": "health", "operation": "add", "value": -9 }, { "type": "spirit", "operation": "add", "value": -5 }] },
+            "failure": { "text": "阴风熄灭油灯，你勉强退回村口。", "effects": [{ "type": "health", "operation": "add", "value": -5 }] },
+            "success": { "text": "你顶住阴风，在草丛里找到一只走失的纸人。哭声随之消散。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 3 }, { "type": "flag", "operation": "set", "id": "returned_paper_child", "value": true }] },
+            "criticalSuccess": { "text": "铜铃般的哭声碎开，一缕阴气反被你炼成了护体的清凉气息。", "effects": [{ "type": "stat", "operation": "add", "stat": "defense", "value": 1 }, { "type": "spirit", "operation": "add", "value": 3 }] }
+          }
+        },
+        {
+          "id": "return_village",
+          "text": "记下位置，先回村叫人",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "异常可能自行消失" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "等众人赶来，路旁只剩被风吹倒的荒草。", "effects": [] }
+        }
+      ]
+    },
+    {
+      "id": "village_wounded_008",
+      "title": "受伤的散修",
+      "levelRange": [5, 8],
+      "weight": 9,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["散修", "抉择"],
+      "intro": "林边躺着一个满身血迹的散修。他还清醒，却始终把一只旧包袱压在身下。",
+      "choices": [
+        {
+          "id": "save_cultivator",
+          "text": "先替他止血，再问来历",
+          "risk": { "grade": "high", "primaryStat": "proficiency", "failureHint": "处理失误会消耗灵力并招来误会" },
+          "resolution": { "mode": "check", "stat": "proficiency", "difficulty": 14, "contextId": "event_wounded_cultivator" },
+          "outcomes": {
+            "criticalFailure": { "text": "你的动作触动了暗伤。散修惊怒之下将你推开，踉跄离去。", "effects": [{ "type": "health", "operation": "add", "value": -4 }, { "type": "spirit", "operation": "add", "value": -4 }] },
+            "failure": { "text": "伤口勉强止住，他不肯久留，只留下一句含混的谢。", "effects": [{ "type": "spirit", "operation": "add", "value": -3 }] },
+            "success": { "text": "散修暂时脱险，把包袱托付给你保管，约定伤好后回来取。", "effects": [{ "type": "item", "operation": "add", "id": "cultivator_bundle", "quantity": 1 }, { "type": "flag", "operation": "set", "id": "helped_wounded_cultivator", "value": true }] },
+            "criticalSuccess": { "text": "你判断准确，连他自己都惊讶伤势能稳得如此之快。", "effects": [{ "type": "item", "operation": "add", "id": "cultivator_bundle", "quantity": 1 }, { "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }, { "type": "flag", "operation": "set", "id": "helped_wounded_cultivator", "value": true }] }
+          }
+        },
+        {
+          "id": "seek_help",
+          "text": "保持距离，回村找药婆",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "来回会耽误时间" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "药婆赶来时，散修已经不见，只剩几滴未干的血。", "effects": [{ "type": "flag", "operation": "set", "id": "wounded_cultivator_missing", "value": true }] }
+        }
+      ]
+    },
+    {
+      "id": "village_dry_well_009",
+      "title": "枯井五色光",
+      "levelRange": [7, 9],
+      "weight": 7,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["五行", "奇遇"],
+      "intro": "废院枯井在深夜亮起五色微光。井沿没有脚印，井底却传来缓慢的呼吸声。",
+      "choices": [
+        {
+          "id": "touch_five_lights",
+          "text": "运转灵力，触碰五色微光",
+          "risk": { "grade": "high", "primaryStat": "intelligence", "failureHint": "五行紊乱会损失灵力" },
+          "resolution": { "mode": "check", "stat": "intelligence", "difficulty": 14, "contextId": "event_dry_well" },
+          "modifiers": [
+            { "when": { "rootCount": 5 }, "forceOutcome": "criticalSuccess", "preview": "五灵根：五色微光与你天然共鸣" },
+            { "when": { "rootCount": 1 }, "checkBonus": 1, "preview": "天灵根：单一灵气足够纯粹" }
+          ],
+          "outcomes": {
+            "criticalFailure": { "text": "五色光同时逆冲经脉，你急忙收手。", "effects": [{ "type": "spirit", "operation": "add", "value": -8 }] },
+            "failure": { "text": "微光始终互相排斥，你只记住了它们流转的顺序。", "effects": [{ "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }] },
+            "success": { "text": "五色光短暂归于平衡，井壁上显出一圈古老刻痕。", "effects": [{ "type": "stat", "operation": "add", "stat": "intelligence", "value": 1 }, { "type": "flag", "operation": "set", "id": "saw_five_element_inscription", "value": true }] },
+            "criticalSuccess": { "text": "五行在你掌心首尾相衔。曾经的嘲笑，在此刻显得格外遥远。", "effects": [{ "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }, { "type": "stat", "operation": "add", "stat": "defense", "value": 1 }, { "type": "flag", "operation": "set", "id": "five_elements_resonated", "value": true }] }
+          }
+        },
+        {
+          "id": "mark_location",
+          "text": "先记下异象，不贸然下井",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "本次不会获得五行感悟" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "天亮前微光消失了，但你牢牢记住了枯井的位置。", "effects": [{ "type": "flag", "operation": "set", "id": "marked_dry_well", "value": true }] }
+        }
+      ]
+    },
+    {
+      "id": "village_stone_gate_010",
+      "title": "后山残破石门",
+      "levelRange": [8, 10],
+      "weight": 6,
+      "scope": "player",
+      "repeatPolicy": "once_per_life",
+      "tags": ["遗迹", "阶段收束"],
+      "intro": "山雨冲开泥坡，露出半扇残破石门。门后传来潮声，但此地离海足有千里。",
+      "choices": [
+        {
+          "id": "open_gate",
+          "text": "检查机关，尝试推开石门",
+          "risk": { "grade": "extreme", "primaryStat": "proficiency", "failureHint": "机关反震可能造成重伤，但新手阶段不会出现越级强敌" },
+          "resolution": { "mode": "check", "stat": "proficiency", "difficulty": 16, "contextId": "event_broken_stone_gate" },
+          "outcomes": {
+            "criticalFailure": { "text": "石门纹路骤亮，你被机关掀飞，门缝也重新合死。", "effects": [{ "type": "health", "operation": "add", "value": -12 }, { "type": "spirit", "operation": "add", "value": -6 }] },
+            "failure": { "text": "你找对了机关，却没有足够力量维持。门后潮声只响了一瞬。", "effects": [{ "type": "health", "operation": "add", "value": -5 }, { "type": "flag", "operation": "set", "id": "heard_gate_tide", "value": true }] },
+            "success": { "text": "石门裂开一线。你从缝隙里取出一枚沾着水汽的石片。", "effects": [{ "type": "item", "operation": "add", "id": "stone_gate_fragment", "quantity": 1 }, { "type": "flag", "operation": "set", "id": "opened_stone_gate", "value": true }] },
+            "criticalSuccess": { "text": "机关逐层退开，门后却不是洞穴，而是一条通往远方的雾中旧路。", "effects": [{ "type": "item", "operation": "add", "id": "stone_gate_fragment", "quantity": 1 }, { "type": "stat", "operation": "add", "stat": "proficiency", "value": 1 }, { "type": "flag", "operation": "set", "id": "found_misty_old_road", "value": true }] }
+          }
+        },
+        {
+          "id": "seal_and_report",
+          "text": "封住入口，回村告知众人",
+          "risk": { "grade": "none", "primaryStat": null, "failureHint": "不会探索门后区域" },
+          "resolution": { "mode": "fixed" },
+          "outcome": { "text": "村民用石块围住入口。你得到谢礼，也留下了一个未解之谜。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 4 }, { "type": "flag", "operation": "set", "id": "sealed_stone_gate", "value": true }] }
+        }
+      ]
+    }
+  ]
+}

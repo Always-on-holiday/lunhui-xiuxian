@@ -1,0 +1,49 @@
+《轮回仙途》随机事件编写说明
+
+一、界面方式
+事件采用“单页场景制”：主区域一次只显示一个当前事件，结算后翻到下一事件；已经完成的内容进入履历，不会无限向下堆积。
+
+二、文件分工
+- 阶段列表.json：控制抽取、判定、风险展示及各等级阶段。
+- 01-新手村.json：控制 1—10 级主线节点、物品和 10 个随机事件。
+- 后续阶段继续使用“02-阶段名.json”“03-阶段名.json”的方式新增。
+
+三、增加事件
+复制 randomEvents 中的一个完整事件对象，然后修改：
+- id：必须唯一，只用英文、数字和下划线。
+- title、intro、choices：玩家会看到的文字。
+- levelRange：允许出现的最低和最高等级。
+- weight：相对抽取权重，越大越常见。
+- risk.grade：none、low、medium、high、extreme 五档。
+- primaryStat：attack、defense、speed、intelligence、proficiency 之一。
+- difficulty：判定目标；通常低 10、中 12、高 14、极高 16。
+
+四、判定结果
+需要判定的选项必须写四种 outcomes：
+- criticalFailure：大失败。
+- failure：失败。
+- success：成功。
+- criticalSuccess：大成功。
+
+固定结果的安全选项使用 resolution.mode = fixed，并只写一个 outcome。
+
+五、效果类型
+- health：改变气血。
+- spirit：改变灵力。
+- spiritStones：改变灵石。
+- stat：改变五维，需要额外填写 stat。
+- item：增加或减少物品，需要填写 id 和 quantity。
+- flag：记录事件状态，用于后续主线或未来支线。
+- level：设置等级；主要由 mainlineProgression 使用。
+
+六、道具与特殊结果
+道具 effects 的 contextId 必须和选项 resolution 的 contextId 相同才生效。玩家可以勾选任意数量道具，但无关道具只提示“无用”，不会加入计算，也不会被消耗。
+
+forceOutcome 可以让特定道具或灵根直接触发奇效；checkBonus 是加成；specialResult 用于解锁特殊文字、入口或后续事件。
+
+七、新手阶段限制
+- 每一世从 10 个随机事件中遇到约 6 个，保留重复游玩的变化。
+- 主线按已完成随机事件数量推进：2 次到 4 级、4 次到 7 级、6 次到 10 级。
+- 支线、战斗经验、闭关和丹药暂不启用。
+- 不生成高于玩家 3 级的敌人，也不允许超出本阶段 10 级。
+- 可能致命的高风险行为必须由玩家明确选择，不做无提示强杀。

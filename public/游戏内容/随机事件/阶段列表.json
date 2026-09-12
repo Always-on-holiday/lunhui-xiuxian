@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "version": 1,
+    "title": "随机事件阶段列表",
+    "status": "第一阶段配置与事件内容就绪，等待事件引擎接入"
+  },
+  "interface": {
+    "mode": "single_page_scene",
+    "currentSceneOnly": true,
+    "historyPanel": true,
+    "desktopStatusPanel": "right",
+    "mobileStatusPanel": "bottom_tabs"
+  },
+  "engine": {
+    "draw": {
+      "persistBeforeDisplay": true,
+      "preventRefreshReroll": true,
+      "unseenWeightMultiplier": 2.5,
+      "recentEventCooldown": 4,
+      "minimumAvailablePool": 4
+    },
+    "check": {
+      "randomMinimum": 0,
+      "randomMaximum": 5,
+      "formula": "stat + cultivationBonus + techniqueBonus + itemBonus + random",
+      "outcomeByMargin": [
+        { "result": "criticalFailure", "maximum": -3 },
+        { "result": "failure", "minimum": -2, "maximum": -1 },
+        { "result": "success", "minimum": 0, "maximum": 2 },
+        { "result": "criticalSuccess", "minimum": 3 }
+      ]
+    },
+    "riskDisplay": {
+      "showGrade": true,
+      "showPrimaryStat": true,
+      "showFailureHint": true,
+      "showExactFormula": false
+    },
+    "enemyProtection": {
+      "maximumLevelsAbovePlayer": 3,
+      "neverExceedStageMaximum": true,
+      "earlyStageLethalEventsRequireExplicitChoice": true
+    },
+    "resolution": {
+      "idempotent": true,
+      "saveUniqueResolutionId": true,
+      "applyOnlyMatchingItemContexts": true,
+      "ignoreAndPreserveUselessItems": true
+    }
+  },
+  "stages": [
+    {
+      "id": 1,
+      "name": "新手村",
+      "realmLabel": "锻体境",
+      "minimumLevel": 1,
+      "maximumLevel": 10,
+      "eventFile": "01-新手村.json",
+      "randomEventCount": 10,
+      "encountersPerLife": 6,
+      "mainlineMode": "single",
+      "sideQuestsEnabled": false
+    },
+    {
+      "id": 2,
+      "name": "待定",
+      "realmLabel": "待定",
+      "minimumLevel": 11,
+      "maximumLevel": 20,
+      "eventFile": null,
+      "randomEventCount": 10,
+      "encountersPerLife": 6,
+      "mainlineMode": "single",
+      "sideQuestsEnabled": false
+    },
+    {
+      "id": 10,
+      "name": "渡劫阶段",
+      "realmLabel": "渡劫境",
+      "minimumLevel": 91,
+      "maximumLevel": 100,
+      "eventFile": null,
+      "randomEventCount": 10,
+      "encountersPerLife": 6,
+      "mainlineMode": "single",
+      "sideQuestsEnabled": false
+    }
+  ]
+}
