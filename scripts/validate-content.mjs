@@ -253,6 +253,73 @@ function validateFreeActionObjects(content, freeConfig) {
   }
 }
 
+function validateSideQuestChapter(config, eventConfig, prologueConfig) {
+  const location = "public/游戏内容/支线/01-青石村.json";
+  if (!config?.quest || !Array.isArray(config.quest.nodes)) {
+    fail(location, "缺少支线任务或节点列表");
+    return;
+  }
+
+  const knownEventIds = new Set((eventConfig?.randomEvents ?? []).map((event) => event.id));
+  const knownItemIds = new Set([
+    ...Object.keys(eventConfig?.itemDefinitions ?? {}),
+    ...Object.keys(prologueConfig?.character?.items ?? {}),
+    ...Object.keys(config.rewardDefinitions?.items ?? {}),
+  ]);
+  const knownTechniqueIds = new Set(Object.keys(config.rewardDefinitions?.techniques ?? {}));
+  const knownMemoryIds = new Set(Object.keys(config.rewardDefinitions?.memories ?? {}));
+  const knownNpcIds = new Set(Object.keys(config.characters ?? {}));
+  const nodeIds = new Set();
+
+  for (const thread of config.personalThreads ?? []) {
+    if (!prologueConfig?.sideQuests?.[thread.id]) fail(`${location}#personalThreads.${thread.id}`, "未对应序章中的灵根支线");
+    if (!Number.isInteger(thread.rootCount) || thread.rootCount < 1 || thread.rootCount > 5) {
+      fail(`${location}#personalThreads.${thread.id}.rootCount`, "灵根数量必须是 1—5 的整数");
+    }
+  }
+
+  for (const [itemId, link] of Object.entries(config.itemLinks ?? {})) {
+    if (!knownItemIds.has(itemId)) fail(`${location}#itemLinks.${itemId}`, "引用了未知道具");
+    const eventMatch = /随机事件\s+([a-z0-9_]+)/i.exec(link.source ?? "");
+    if (eventMatch && !knownEventIds.has(eventMatch[1])) {
+      fail(`${location}#itemLinks.${itemId}.source`, `引用了未知随机事件 ${eventMatch[1]}`);
+    }
+  }
+
+  for (const node of config.quest.nodes) {
+    if (!node.id || nodeIds.has(node.id)) fail(`${location}#quest.nodes`, `节点 id 缺失或重复：${node.id ?? "空"}`);
+    nodeIds.add(node.id);
+    if (!Array.isArray(node.choices) || node.choices.length < 2) fail(`${location}#${node.id}`, "每个节点至少需要两个选择");
+    for (const npcId of node.npcIds ?? []) if (!knownNpcIds.has(npcId)) fail(`${location}#${node.id}.npcIds`, `引用了未知人物 ${npcId}`);
+  }
+
+  const externalLinks = new Set(config.rules?.externalLinkIds ?? []);
+  for (const [itemId, link] of Object.entries(config.itemLinks ?? {})) {
+    for (const target of link.links ?? []) {
+      if (!nodeIds.has(target) && !externalLinks.has(target)) fail(`${location}#itemLinks.${itemId}.links`, `引用了未知联动节点 ${target}`);
+    }
+  }
+
+  for (const node of config.quest.nodes) {
+    const choiceIds = new Set();
+    for (const choice of node.choices ?? []) {
+      if (!choice.id || choiceIds.has(choice.id)) fail(`${location}#${node.id}.choices`, `选项 id 缺失或重复：${choice.id ?? "空"}`);
+      choiceIds.add(choice.id);
+      for (const requirement of choice.requirements ?? []) {
+        if (requirement.type === "item" && !knownItemIds.has(requirement.id)) fail(`${location}#${node.id}.${choice.id}`, `条件引用了未知道具 ${requirement.id}`);
+      }
+      for (const nextId of [choice.nextNode, choice.successNextNode, choice.failureNextNode].filter(Boolean)) {
+        if (!nodeIds.has(nextId)) fail(`${location}#${node.id}.${choice.id}`, `引用了未知后续节点 ${nextId}`);
+      }
+      for (const effect of choice.effects ?? []) {
+        if (["item", "consume_item"].includes(effect.type) && !knownItemIds.has(effect.id)) fail(`${location}#${node.id}.${choice.id}`, `效果引用了未知道具 ${effect.id}`);
+        if (effect.type === "technique" && !knownTechniqueIds.has(effect.id)) fail(`${location}#${node.id}.${choice.id}`, `效果引用了未知技法 ${effect.id}`);
+        if (effect.type === "memory_candidate" && !knownMemoryIds.has(effect.id)) fail(`${location}#${node.id}.${choice.id}`, `效果引用了未知记忆 ${effect.id}`);
+      }
+    }
+  }
+}
+
 const files = await jsonFiles(contentRoot);
 const parsed = new Map();
 for (const file of files) parsed.set(path.normalize(file), await readJson(file));
@@ -263,9 +330,16 @@ validateFreeActionObjects(
   parsed.get(path.normalize(path.join(contentRoot, "自由行动", "内容对象示例.json"))),
   freeActionConfig,
 );
-validateEventLibrary(parsed.get(path.normalize(path.join(contentRoot, "随机事件", "01-新手村.json"))));
-validatePrologue(parsed.get(path.normalize(path.join(contentRoot, "序章规则.json"))));
+const firstStageEvents = parsed.get(path.normalize(path.join(contentRoot, "随机事件", "01-新手村.json")));
+const prologueConfig = parsed.get(path.normalize(path.join(contentRoot, "序章规则.json")));
+validateEventLibrary(firstStageEvents);
+validatePrologue(prologueConfig);
 validateReincarnation(parsed.get(path.normalize(path.join(contentRoot, "轮回规则.json"))));
+validateSideQuestChapter(
+  parsed.get(path.normalize(path.join(contentRoot, "支线", "01-青石村.json"))),
+  firstStageEvents,
+  prologueConfig,
+);
 
 if (errors.length > 0) {
   console.error(`内容检查失败，共 ${errors.length} 项：`);

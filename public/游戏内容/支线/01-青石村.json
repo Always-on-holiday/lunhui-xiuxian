@@ -1,0 +1,368 @@
+{
+  "meta": {
+    "version": 1,
+    "stageId": 1,
+    "title": "第一章支线：青石村旧契",
+    "status": "内容蓝图完成，待支线引擎接入",
+    "design": "一条公共暗线、五种灵根入口、多道具解法；错过关键事件也必须保留继续路线"
+  },
+  "rules": {
+    "levelRange": [2, 10],
+    "visibility": "hidden_until_unlocked",
+    "recommendedNodesPerLife": 3,
+    "maximumNodesPerLife": 5,
+    "defaultNodeTimeDays": 3,
+    "externalLinkIds": ["stage_02_entry", "multiplayer_revival"],
+    "failedCheckDoesNotBlockQuest": true,
+    "importantItemsAreNotAutoConsumed": true,
+    "showItemSpecialEffectBeforeResolution": false,
+    "externalLinkIds": ["stage_02_entry", "multiplayer_revival"]
+  },
+  "characters": {
+    "medicine_granny": {
+      "name": "药婆孟七",
+      "level": 6,
+      "role": "知道旧契的一角，却不愿主动提起井下之事",
+      "tags": ["医者", "村民", "知情者"]
+    },
+    "mute_keeper": {
+      "name": "哑叔",
+      "level": 8,
+      "role": "看守废祠的沉默老人，真实身份是旧契最后的守门人",
+      "tags": ["守门人", "隐藏修士", "不可轻易杀死"]
+    },
+    "wounded_cultivator": {
+      "name": "沈砚",
+      "level": 9,
+      "role": "受伤散修，携带能证明青石村与雾隐遗迹关系的半张水路图",
+      "tags": ["散修", "负伤", "可结交", "可敌对"]
+    },
+    "paper_child": {
+      "name": "阿满",
+      "level": 3,
+      "role": "被困在纸人中的残魂，记得旧契签订当夜的一句话",
+      "tags": ["残魂", "孩童", "剧情证人"]
+    }
+  },
+  "personalThreads": [
+    {
+      "id": "fame",
+      "rootCount": 1,
+      "title": "盛名之下",
+      "entry": "测灵结束后，众人争相邀你入席，只有哑叔把废祠钥匙压在茶碗下。",
+      "choiceFocus": "接受资源但欠下人情，或拒绝奉承并提前接触旧契",
+      "reward": { "flag": "noticed_mute_keeper", "stat": "intelligence", "value": 1 },
+      "commonQuestLead": "你发现哑叔并不在意天灵根，他在确认你是否会被盛名牵着走。"
+    },
+    {
+      "id": "paired_scroll",
+      "rootCount": 2,
+      "title": "相生旧卷",
+      "entry": "藏书阁残卷的两页无法单独阅读，叠在一起却显出一幅井底水纹。",
+      "choiceFocus": "公开残卷换取奖励，或私下追查图中的废祠与枯井",
+      "reward": { "flag": "decoded_paired_scroll", "stat": "attack", "value": 1 },
+      "commonQuestLead": "残卷边缘的缺口与铁匠铺旧牌完全一致。"
+    },
+    {
+      "id": "herb_basket",
+      "rootCount": 3,
+      "title": "药篓缺角",
+      "entry": "药婆的旧篓夹层里藏着一味只生在阴水旁的续魂草。",
+      "choiceFocus": "替药婆保守秘密，或追问草药为何会沾着井水气息",
+      "reward": { "flag": "found_soul_herb_trace", "stat": "proficiency", "value": 1 },
+      "commonQuestLead": "若曾取得带露野药，药婆会直接承认沈砚来过村中。"
+    },
+    {
+      "id": "courtyard_chores",
+      "rootCount": 4,
+      "title": "四时杂役",
+      "entry": "四座偏院的杂役看似无关，完成后地面水沟却恰好拼成一幅阵图。",
+      "choiceFocus": "按规矩交差，或借四象天赋逆着水沟寻找阵眼",
+      "reward": { "flag": "mapped_four_courtyards", "stat": "speed", "value": 1 },
+      "commonQuestLead": "阵眼指向已经封闭多年的废祠后墙。"
+    },
+    {
+      "id": "five_element_stone",
+      "rootCount": 5,
+      "title": "井边的五行石",
+      "entry": "嘲笑声散去后，井沿五块凡石依次回应你的五道灵气。",
+      "choiceFocus": "取走五行石证明自己，或让石头保持原位继续封住井下之物",
+      "reward": { "flag": "heard_well_heartbeat", "stat": "defense", "value": 1 },
+      "commonQuestLead": "你比其他路线更早听见井底并非水声，而是某种缓慢的心跳。"
+    }
+  ],
+  "itemLinks": {
+    "family_letter": {
+      "source": "普通家庭出身",
+      "links": ["ancestral_hall_ledger"],
+      "special": "家书姓氏与旧契残页吻合，可免去一次交涉判定并开启祖祠暗门",
+      "consume": false
+    },
+    "wild_herb": {
+      "source": "随机事件 village_herb_001",
+      "links": ["missing_cultivator"],
+      "special": "为沈砚稳定伤势，使其清醒交出水路图而非只留下包袱",
+      "consume": true
+    },
+    "iron_token": {
+      "source": "随机事件 village_smith_002",
+      "links": ["ancestral_hall_ledger", "stone_gate_conclusion"],
+      "special": "既是废祠库门旧牌，也是石门机关缺失的一齿；玩家必须决定在哪一处使用",
+      "consume": false
+    },
+    "spirit_fish_scale": {
+      "source": "随机事件 village_fish_004",
+      "links": ["dry_well_descent"],
+      "special": "照出井壁暗流和安全落脚点，将高风险下井改为中风险",
+      "consume": false
+    },
+    "repellent_incense": {
+      "source": "随机事件 village_pests_005",
+      "links": ["ancestral_hall_ledger"],
+      "special": "烟气熏出啃食账页的墨虫，保住被隐藏的沈姓记录",
+      "consume": true
+    },
+    "bronze_talisman": {
+      "source": "随机事件 village_merchant_006",
+      "links": ["dry_well_descent"],
+      "special": "压住纸童残魂的惊惧，避免其失控并获得完整证词",
+      "consume": false
+    },
+    "cultivator_bundle": {
+      "source": "随机事件 village_wounded_008",
+      "links": ["missing_cultivator", "stone_gate_conclusion"],
+      "special": "原样归还可换取信任；私自拆开能提前得到线索，但会留下失信标记",
+      "consume": false
+    },
+    "soul_wood": {
+      "source": "随机事件 village_night_cry_007",
+      "links": ["dry_well_descent", "multiplayer_revival"],
+      "special": "可先救阿满获得旧契证词，也可保留给玩家复活；形成真正的资源取舍",
+      "consume": true
+    },
+    "stone_gate_fragment": {
+      "source": "随机事件 village_stone_gate_010",
+      "links": ["stone_gate_conclusion", "stage_02_entry"],
+      "special": "既能作为本章结局证物，也能继承到下一世或第二章开启雾路隐藏入口",
+      "consume": false
+    },
+    "half_waterway_map": {
+      "source": "支线节点 missing_cultivator",
+      "links": ["dry_well_descent", "stone_gate_conclusion"],
+      "special": "标明枯井与石门属于同一条地下灵脉，并降低最终机关判定难度",
+      "consume": false
+    }
+  },
+  "rewardDefinitions": {
+    "items": {
+      "half_waterway_map": {
+        "name": "半张水路图",
+        "category": "任务物品",
+        "description": "墨线画的不是河道，而是青石村地下被封住的灵脉。",
+        "consumable": false
+      }
+    },
+    "techniques": {
+      "mist_step_fragment": {
+        "name": "雾行步·残式",
+        "grade": "凡阶",
+        "description": "守门人从雾路阵纹中悟出的步法，擅长在狭窄地形中避开第一击。"
+      }
+    },
+    "memories": {
+      "village_old_pact_truth": {
+        "name": "旧契真相",
+        "description": "你记得石门并非单纯封印，而是一条会选择来客的雾中旧路。"
+      }
+    }
+  },
+  "quest": {
+    "id": "village_old_pact",
+    "title": "青石村旧契",
+    "summary": "村中几件互不相干的小事，都指向被抹去的沈姓、枯井和一扇会传出潮声的石门。",
+    "unlock": {
+      "levelMinimum": 3,
+      "any": [
+        { "type": "personal_thread_complete" },
+        { "type": "flag", "id": "heard_stone_gate_rumor", "value": true },
+        { "type": "item", "id": "family_letter", "minimum": 1 },
+        { "type": "item", "id": "cultivator_bundle", "minimum": 1 }
+      ]
+    },
+    "nodes": [
+      {
+        "id": "ancestral_hall_ledger",
+        "title": "废祠残账",
+        "scene": "哑叔在入夜后打开废祠。供桌下只剩半本被虫啃过的族账，沈姓一页被人刻意撕走。",
+        "npcIds": ["mute_keeper"],
+        "choices": [
+          {
+            "id": "show_family_letter",
+            "text": "拿出家中旧信核对残账",
+            "requirements": [{ "type": "item", "id": "family_letter", "minimum": 1 }],
+            "risk": "none",
+            "result": "哑叔认出信上的印记，允许你从暗门进入祠后密道。",
+            "effects": [{ "type": "flag", "id": "old_pact_family_proven", "value": true }],
+            "nextNode": "missing_cultivator"
+          },
+          {
+            "id": "smoke_out_ink_worms",
+            "text": "点燃驱虫香，寻找被墨虫啃掉的字",
+            "requirements": [{ "type": "item", "id": "repellent_incense", "minimum": 1 }],
+            "risk": "low",
+            "result": "墨虫从夹层爬出，腹中透出尚未消化的沈姓墨迹。",
+            "effects": [{ "type": "consume_item", "id": "repellent_incense", "quantity": 1 }, { "type": "flag", "id": "recovered_shen_record", "value": true }],
+            "nextNode": "missing_cultivator"
+          },
+          {
+            "id": "question_keeper",
+            "text": "不依赖道具，观察哑叔的反应并追问",
+            "risk": "medium",
+            "check": { "stat": "intelligence", "difficulty": 12 },
+            "successNextNode": "missing_cultivator",
+            "failureNextNode": "dry_well_descent",
+            "failureStillContinues": true
+          }
+        ]
+      },
+      {
+        "id": "missing_cultivator",
+        "title": "包袱的主人",
+        "scene": "沈砚曾来废祠寻找祖先留下的水路图。如今他受伤失踪，包袱和血迹分别指向两条路。",
+        "npcIds": ["medicine_granny", "wounded_cultivator"],
+        "choices": [
+          {
+            "id": "return_bundle_sealed",
+            "text": "找到沈砚并原样归还包袱",
+            "requirements": [{ "type": "item", "id": "cultivator_bundle", "minimum": 1 }],
+            "risk": "medium",
+            "check": { "stat": "proficiency", "difficulty": 13, "itemBonus": { "wild_herb": 3 } },
+            "result": "沈砚确认你没有拆开包袱，主动交出半张水路图。",
+            "effects": [{ "type": "flag", "id": "won_shen_yan_trust", "value": true }, { "type": "item", "id": "half_waterway_map", "quantity": 1 }],
+            "nextNode": "dry_well_descent"
+          },
+          {
+            "id": "open_bundle",
+            "text": "私下拆开包袱寻找线索",
+            "requirements": [{ "type": "item", "id": "cultivator_bundle", "minimum": 1 }],
+            "risk": "low",
+            "result": "你提前得到半张水路图，也在封绳上留下无法复原的痕迹。",
+            "effects": [{ "type": "flag", "id": "broke_shen_yan_trust", "value": true }, { "type": "item", "id": "half_waterway_map", "quantity": 1 }],
+            "nextNode": "dry_well_descent"
+          },
+          {
+            "id": "follow_blood_without_bundle",
+            "text": "沿血迹追查，不等待包袱事件",
+            "risk": "high",
+            "check": { "stat": "speed", "difficulty": 14 },
+            "successNextNode": "dry_well_descent",
+            "failureNextNode": "dry_well_descent",
+            "failureStillContinues": true
+          }
+        ]
+      },
+      {
+        "id": "dry_well_descent",
+        "title": "井下纸童",
+        "scene": "枯井暗流尽头坐着一个浸湿的纸童。它反复念着：沈家守门，青石守人。",
+        "npcIds": ["paper_child"],
+        "choices": [
+          {
+            "id": "guide_with_scale",
+            "text": "借青鳞辨认暗流，绕开井下禁制",
+            "requirements": [{ "type": "item", "id": "spirit_fish_scale", "minimum": 1 }],
+            "risk": "medium",
+            "result": "青鳞映出安全水纹，你带着纸童完整返回地面。",
+            "effects": [{ "type": "flag", "id": "learned_old_pact_truth", "value": true }],
+            "nextNode": "stone_gate_conclusion"
+          },
+          {
+            "id": "calm_with_talisman",
+            "text": "用旧铜符压住阴气，询问纸童",
+            "requirements": [{ "type": "item", "id": "bronze_talisman", "minimum": 1 }],
+            "risk": "low",
+            "result": "纸童恢复片刻清醒，说出旧契并非封妖，而是在封住一条会吞人的雾路。",
+            "effects": [{ "type": "flag", "id": "learned_old_pact_truth", "value": true }],
+            "nextNode": "stone_gate_conclusion"
+          },
+          {
+            "id": "stabilize_with_soul_wood",
+            "text": "消耗养魂木，让阿满暂时恢复神智",
+            "requirements": [{ "type": "item", "id": "soul_wood", "minimum": 1 }],
+            "risk": "none",
+            "result": "阿满认出沈砚的水路图，并指出石门真正的开启顺序。",
+            "effects": [{ "type": "consume_item", "id": "soul_wood", "quantity": 1 }, { "type": "flag", "id": "paper_child_saved", "value": true }],
+            "nextNode": "stone_gate_conclusion"
+          },
+          {
+            "id": "descend_without_tool",
+            "text": "不借外物，凭自身修为下井",
+            "risk": "high",
+            "check": { "stat": "defense", "difficulty": 15, "rootCountFiveBonus": 4 },
+            "successNextNode": "stone_gate_conclusion",
+            "failureNextNode": "stone_gate_conclusion",
+            "failureStillContinues": true
+          }
+        ]
+      },
+      {
+        "id": "stone_gate_conclusion",
+        "title": "旧契如何结束",
+        "scene": "众人在后山石门前对质。门后雾路正在苏醒，但它也是离开青石村最快的一条修行捷径。",
+        "npcIds": ["mute_keeper", "wounded_cultivator"],
+        "choices": [
+          {
+            "id": "renew_pact",
+            "text": "协助哑叔重立封印，暂时关闭雾路",
+            "risk": "medium",
+            "check": { "stat": "proficiency", "difficulty": 13, "itemBonus": { "iron_token": 3 } },
+            "result": "青石村得以安稳，哑叔将守门人的一段口诀交给你。",
+            "effects": [{ "type": "flag", "id": "renewed_village_pact", "value": true }, { "type": "technique", "id": "mist_step_fragment" }],
+            "ending": "guardian"
+          },
+          {
+            "id": "open_mist_road",
+            "text": "保留石门并开启雾路，为第二章留下捷径",
+            "requirements": [{ "type": "item", "id": "stone_gate_fragment", "minimum": 1 }],
+            "risk": "high",
+            "result": "石片与门扉重新咬合。雾中旧路只为记住它气息的人开启。",
+            "effects": [{ "type": "flag", "id": "mist_road_available", "value": true }, { "type": "memory_candidate", "id": "village_old_pact_truth" }],
+            "ending": "explorer"
+          },
+          {
+            "id": "tell_the_village",
+            "text": "公开真相，让村民共同决定石门去留",
+            "risk": "low",
+            "result": "秘密不再只压在一个守门人身上，但村中也因此分成了两派。",
+            "effects": [{ "type": "flag", "id": "old_pact_made_public", "value": true }, { "type": "spiritStones", "value": 5 }],
+            "ending": "public"
+          },
+          {
+            "id": "destroy_gate",
+            "text": "尝试彻底毁掉石门",
+            "risk": "extreme",
+            "check": { "stat": "attack", "difficulty": 17 },
+            "successResult": "石门崩裂，雾路暂时断绝，一块门心碎片落入你手中。",
+            "failureResult": "石门反震，雾气记住了你的气息；支线仍结束，但第二章敌对事件权重上升。",
+            "effects": [{ "type": "flag", "id": "stone_gate_broken", "value": true }],
+            "ending": "breaker"
+          }
+        ]
+      }
+    ],
+    "fallbacks": [
+      {
+        "when": "没有取得任何关键道具",
+        "route": "允许通过智力、速度、防御三次普通判定推进；失败只增加伤势、耗时或敌对标记"
+      },
+      {
+        "when": "关键 NPC 死亡或敌对",
+        "route": "从尸体、遗留物、村民流言取得同等主线信息，但失去人物奖励"
+      },
+      {
+        "when": "玩家已错过对应随机事件",
+        "route": "支线不显示未取得道具的专属选项，同时始终保留无道具路线"
+      }
+    ]
+  }
+}
