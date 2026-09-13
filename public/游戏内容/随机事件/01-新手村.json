@@ -409,6 +409,111 @@
       "repeatPolicy": "once_per_life",
       "tags": ["散修", "抉择"],
       "intro": "林边躺着一个满身血迹的散修。他还清醒，却始终把一只旧包袱压在身下。",
+      "interactable": {
+        "id": "wounded_cultivator_shen_yan",
+        "name": "沈砚",
+        "type": "npc",
+        "level": 9,
+        "stats": { "attack": 14, "defense": 8, "speed": 9, "intelligence": 13, "proficiency": 12 },
+        "baseDifficulty": 12,
+        "relation": -1,
+        "state": "wounded",
+        "tags": ["neutral", "wounded", "important"],
+        "traits": { "concealment": 16, "alertness": 14, "willpower": 13, "bargaining": 8, "courage": 15, "severity": 18, "suspicion": 18 },
+        "recommendedActions": ["observe", "talk", "help", "trade"],
+        "extraActions": ["threaten", "steal", "rob", "attack", "kill", "infringe", "leave"],
+        "overrides": {
+          "observe.success": {
+            "message": "你看出他伤在左肋，衣下还藏着一道压制灵力的封印。",
+            "effects": [{ "type": "set_flag", "id": "noticed_shen_yan_seal", "value": true }]
+          },
+          "observe.criticalSuccess": {
+            "message": "你不仅看清伤势，还认出旧包袱里夹着半张石门舆图；沈砚也察觉你已经发现了秘密。",
+            "effects": [{ "type": "set_flag", "id": "recognized_shen_yan_map", "value": true }]
+          },
+          "talk.success": {
+            "message": "他自称沈砚，只肯透露追兵与后山石门有关，并问你是否愿意帮他止血。",
+            "nextSystem": "dialogue",
+            "effects": [{ "type": "set_flag", "id": "learned_shen_yan_name", "value": true }]
+          },
+          "talk.criticalSuccess": {
+            "message": "沈砚暂时信了你，说出石门会在五色灵气汇聚时开启，并承诺活下来后还你一个人情。",
+            "nextSystem": "dialogue",
+            "effects": [{ "type": "set_flag", "id": "shen_yan_promised_favor", "value": true }]
+          },
+          "help.success": {
+            "message": "你稳住了最危险的一处出血。沈砚仍需正式救治，但对你的戒心已经减轻。",
+            "effects": [{ "type": "set_flag", "id": "stabilized_shen_yan", "value": true }, { "type": "set_state", "value": "alive" }]
+          },
+          "help.criticalSuccess": {
+            "message": "你顺着封印避开暗伤，沈砚得以自行运功疗伤，并主动交代了包袱不能落入追兵手中。",
+            "effects": [{ "type": "set_flag", "id": "stabilized_shen_yan", "value": true }, { "type": "set_flag", "id": "shen_yan_revealed_pursuers", "value": true }, { "type": "set_state", "value": "alive" }]
+          },
+          "help@alive": {
+            "available": false,
+            "unavailableReason": "沈砚的伤势已经稳住，无需重复处理。"
+          },
+          "trade.success": {
+            "message": "沈砚不肯卖掉包袱，却愿意用一条石门消息换取你不追问他的来历。",
+            "effects": [{ "type": "set_flag", "id": "traded_for_stone_gate_rumor", "value": true }]
+          },
+          "trade.criticalSuccess": {
+            "message": "你谈成了一笔不花灵石的约定：替他遮掩行踪，事后可凭暗号换取石门舆图。",
+            "effects": [{ "type": "set_flag", "id": "earned_shen_yan_map_claim", "value": true }]
+          },
+          "threaten.success": {
+            "message": "沈砚暂时服软，吐露追兵来自黑水坊，却把你的面貌牢牢记住。",
+            "effects": [{ "type": "set_flag", "id": "forced_blackwater_clue", "value": true }, { "type": "set_state", "value": "hostile" }]
+          },
+          "steal.success": {
+            "message": "你趁他压制伤势时夺走旧包袱，但林间响起了另一人的脚步声。",
+            "effects": [{ "type": "item", "id": "cultivator_bundle", "quantity": 1 }, { "type": "set_flag", "id": "stole_shen_yan_bundle", "value": true }, { "type": "set_state", "value": "looted" }]
+          },
+          "steal.criticalSuccess": {
+            "message": "旧包袱悄无声息地落入你手中，沈砚一时尚未察觉，但这笔账不会永远藏住。",
+            "effects": [{ "type": "item", "id": "cultivator_bundle", "quantity": 1 }, { "type": "set_flag", "id": "stole_shen_yan_bundle_unseen", "value": true }, { "type": "set_state", "value": "looted" }]
+          },
+          "steal@looted": {
+            "available": false,
+            "unavailableReason": "沈砚的旧包袱已经不在身边，没有东西可再偷。"
+          },
+          "rob.success": {
+            "message": "你强行夺下旧包袱。沈砚无力追回，只能带着恨意记住你。",
+            "effects": [{ "type": "item", "id": "cultivator_bundle", "quantity": 1 }, { "type": "set_flag", "id": "robbed_shen_yan_bundle", "value": true }, { "type": "set_state", "value": "looted" }]
+          },
+          "rob.criticalSuccess": {
+            "message": "你在沈砚反应过来前便夺下旧包袱，并抢占了退路；他只能压着伤势目送你离开。",
+            "effects": [{ "type": "item", "id": "cultivator_bundle", "quantity": 1 }, { "type": "set_flag", "id": "robbed_shen_yan_bundle", "value": true }, { "type": "set_state", "value": "looted" }]
+          },
+          "rob@looted": {
+            "available": false,
+            "unavailableReason": "旧包袱已经被取走，继续抢夺只会演变成无意义的冲突。"
+          },
+          "attack": {
+            "message": "沈砚强撑伤势迎战。胜负将交给战斗结算，攻击不会直接跳过战斗判定。",
+            "nextSystem": "combat",
+            "effects": [{ "type": "set_flag", "id": "attacked_shen_yan", "value": true }, { "type": "set_state", "value": "hostile" }]
+          },
+          "kill": {
+            "message": "沈砚拼死反击。必须先进入致死战斗；即使他死亡，石门线索也会转移到包袱、尸身或追兵身上。",
+            "nextSystem": "combat",
+            "effects": [{ "type": "set_flag", "id": "attempted_to_kill_shen_yan", "value": true }, { "type": "set_state", "value": "hostile" }]
+          },
+          "infringe.success": {
+            "message": "你强行触碰他的神识封印，只截获“黑水坊、石门、潮声”三个片段；沈砚从此与你敌对。",
+            "nextSystem": "mainline_reroute",
+            "effects": [{ "type": "set_flag", "id": "violated_shen_yan_seal", "value": true }, { "type": "set_state", "value": "hostile" }]
+          },
+          "infringe.criticalSuccess": {
+            "message": "你从封印裂隙中搜得一段残缺路线，却也在自己识海留下陌生印记；石门主线改由危险线索继续。",
+            "nextSystem": "mainline_reroute",
+            "effects": [{ "type": "set_flag", "id": "soul_searched_shen_yan", "value": true }, { "type": "set_flag", "id": "stone_gate_hostile_route", "value": true }, { "type": "set_state", "value": "hostile" }]
+          },
+          "leave": {
+            "message": "你暂时退开。只要还未结算本事件，仍可回来作出正式选择。"
+          }
+        }
+      },
       "choices": [
         {
           "id": "save_cultivator",

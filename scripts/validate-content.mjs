@@ -95,7 +95,7 @@ function validateFreeActions(config) {
   }
 }
 
-function validateEventLibrary(config) {
+function validateEventLibrary(config, freeActionConfig) {
   const location = "public/游戏内容/随机事件/01-新手村.json";
   if (!Array.isArray(config?.randomEvents)) return;
   const eventIds = new Set();
@@ -104,6 +104,31 @@ function validateEventLibrary(config) {
     if (eventIds.has(event.id)) fail(`${location}#randomEvents`, `事件 id 重复：${event.id}`);
     eventIds.add(event.id);
     if (!Array.isArray(event.choices) || event.choices.length === 0) fail(`${location}#${event.id}`, "事件必须至少有一个选项");
+    const interactable = event.interactable;
+    if (interactable) {
+      const objectLocation = `${location}#${event.id}.interactable`;
+      if (!(freeActionConfig?.targetTypes ?? []).includes(interactable.type)) fail(objectLocation, `未知对象类型 ${interactable.type}`);
+      if (interactable.state && !(freeActionConfig?.objectTags?.state ?? []).includes(interactable.state)) fail(objectLocation, `未知对象状态 ${interactable.state}`);
+      const allowedTags = new Set(freeActionConfig?.objectTags?.[interactable.type] ?? []);
+      for (const tag of interactable.tags ?? []) if (!allowedTags.has(tag)) fail(`${objectLocation}.tags`, `未知 ${interactable.type} 标签 ${tag}`);
+      const actionIds = [...(interactable.recommendedActions ?? []), ...(interactable.extraActions ?? [])];
+      for (const actionId of actionIds) {
+        const action = freeActionConfig?.actions?.[actionId];
+        if (!action) fail(objectLocation, `引用了未知动作 ${actionId}`);
+        else if (!(action.targets ?? []).includes(interactable.type)) fail(objectLocation, `动作 ${actionId} 不能用于 ${interactable.type}`);
+      }
+      if ((interactable.recommendedActions ?? []).length > (freeActionConfig?.interface?.recommendedActionLimit ?? 0)) {
+        fail(objectLocation, `推荐动作不能超过 ${freeActionConfig?.interface?.recommendedActionLimit ?? 0} 个`);
+      }
+      for (const [overrideKey, override] of Object.entries(interactable.overrides ?? {})) {
+        const actionId = overrideKey.split(/[.@]/, 1)[0];
+        if (!freeActionConfig?.actions?.[actionId]) fail(`${objectLocation}.overrides`, `覆写引用了未知动作 ${actionId}`);
+        for (const effect of override.effects ?? []) {
+          if (effect.type === "item" && !itemIds.has(effect.id)) fail(`${objectLocation}.overrides.${overrideKey}`, `效果引用了未知物品 ${effect.id}`);
+          if (effect.type === "set_state" && !(freeActionConfig?.objectTags?.state ?? []).includes(effect.value)) fail(`${objectLocation}.overrides.${overrideKey}`, `效果引用了未知状态 ${effect.value}`);
+        }
+      }
+    }
     for (const choice of event.choices ?? []) {
       const outcomes = choice.outcomes ? Object.values(choice.outcomes) : [choice.outcome];
       for (const outcome of outcomes) {
@@ -332,7 +357,7 @@ validateFreeActionObjects(
 );
 const firstStageEvents = parsed.get(path.normalize(path.join(contentRoot, "随机事件", "01-新手村.json")));
 const prologueConfig = parsed.get(path.normalize(path.join(contentRoot, "序章规则.json")));
-validateEventLibrary(firstStageEvents);
+validateEventLibrary(firstStageEvents, freeActionConfig);
 validatePrologue(prologueConfig);
 validateReincarnation(parsed.get(path.normalize(path.join(contentRoot, "轮回规则.json"))));
 validateSideQuestChapter(

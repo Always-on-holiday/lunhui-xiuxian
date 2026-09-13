@@ -23,6 +23,7 @@ import { LongevityPanel } from "@/components/longevity-panel";
 import { CycleSecretScene, InheritanceScene, SoulScene } from "@/components/reincarnation-scenes";
 import {
   continueVillageAdventure,
+  currentRandomEvent,
   isEventEngineConfig,
   isEventLibraryConfig,
   resolveEventChoice,
@@ -169,6 +170,8 @@ type ActionSelection = {
   target: FreeActionTarget;
   sourceItemId?: string;
   sourcePlayerId?: string;
+  recommendedActions?: string[];
+  extraActions?: string[];
 };
 
 function itemTags(item: InventoryItem) {
@@ -814,6 +817,26 @@ export default function Home() {
     };
   }
 
+  function eventNpcActionSelection(): ActionSelection | null {
+    if (!life) return null;
+    const event = currentRandomEvent(life, eventConfig);
+    const npc = event?.interactable;
+    if (!event || !npc) return null;
+    return {
+      key: `event:${event.id}:${npc.id}`,
+      target: {
+        ...npc,
+        state: life.freeActionTargetStates?.[npc.id] ?? npc.state,
+        stats: npc.stats ? { ...npc.stats } : undefined,
+        tags: [...npc.tags],
+        traits: npc.traits ? { ...npc.traits } : undefined,
+        overrides: npc.overrides ? { ...npc.overrides } : undefined,
+      },
+      recommendedActions: [...npc.recommendedActions],
+      extraActions: [...npc.extraActions],
+    };
+  }
+
   function secondaryTargetFor(actionId: string, selection: ActionSelection): FreeActionTarget | undefined {
     if (!life || !session || !room) return undefined;
     if (actionId === "use_item") {
@@ -834,14 +857,15 @@ export default function Home() {
     if (!life || life.deathState || lifeExpired || !session || !room) return null;
     const attemptKey = `${selection.key}:${actionId}`;
     const isHostilePvpAction = Boolean(selection.sourcePlayerId && HOSTILE_ACTIONS.has(actionId));
+    const activeEvent = currentRandomEvent(life, eventConfig);
     return {
       actor: freeActionActorFromLife(session.playerId, life),
       target: selection.target,
       secondaryTarget: secondaryTargetFor(actionId, selection),
       world: {
         seed: `${room.code}:${room.createdAt}`,
-        locationId: "green-stone-village",
-        locationTags: ["settlement"],
+        locationId: selection.key.startsWith("event:") && activeEvent ? activeEvent.id : "green-stone-village",
+        locationTags: ["settlement", ...(selection.key.startsWith("event:") ? activeEvent?.tags ?? [] : [])],
         witnessCount: Math.max(0, room.players.filter((player) => player.lifeStatus === "alive").length - 2),
       },
       actionId,
@@ -897,6 +921,43 @@ export default function Home() {
       },
       freeActionWorldMinutes: accumulatedMinutes % (24 * 60),
     };
+    for (const effect of resolution.effects) {
+      if (effect.type === "set_flag" && typeof effect.id === "string") {
+        const flagValue = typeof effect.value === "boolean" || typeof effect.value === "string" || typeof effect.value === "number"
+          ? effect.value
+          : true;
+        nextLife = {
+          ...nextLife,
+          freeActionFlags: {
+            ...(nextLife.freeActionFlags ?? {}),
+            [effect.id]: flagValue,
+          },
+          adventure: nextLife.adventure && typeof flagValue === "boolean"
+            ? { ...nextLife.adventure, flags: { ...nextLife.adventure.flags, [effect.id]: flagValue } }
+            : nextLife.adventure,
+        };
+      }
+      if (effect.type === "set_state" && typeof effect.value === "string") {
+        nextLife = {
+          ...nextLife,
+          freeActionTargetStates: {
+            ...(nextLife.freeActionTargetStates ?? {}),
+            [selection.target.id]: effect.value,
+          },
+        };
+      }
+      if (effect.type === "item" && typeof effect.id === "string") {
+        const definition = eventConfig.itemDefinitions[effect.id];
+        if (definition) {
+          const quantity = typeof effect.quantity === "number" ? Math.max(1, Math.round(effect.quantity)) : 1;
+          const inventory = [...(nextLife.inventory ?? [])];
+          const existingIndex = inventory.findIndex((item) => item.id === effect.id);
+          if (existingIndex >= 0) inventory[existingIndex] = { ...inventory[existingIndex], quantity: inventory[existingIndex].quantity + quantity };
+          else inventory.push({ ...definition, quantity, effects: definition.effects.map((itemEffect) => ({ ...itemEffect })) });
+          nextLife = { ...nextLife, inventory };
+        }
+      }
+    }
     if (elapsedDays > 0) {
       nextLife = spendLifeTime(nextLife, elapsedDays, "自由行动", prologueConfig.timeSystem);
     }
@@ -919,10 +980,13 @@ export default function Home() {
 
   function renderFreeActionMenu(selection: ActionSelection) {
     if (!life || life.deathState || lifeExpired || activeActionTarget !== selection.key) return null;
-    const order = selection.target.type === "item" ? ITEM_ACTION_ORDER : PLAYER_ACTION_ORDER;
+    const order = selection.recommendedActions
+      ? [...selection.recommendedActions, ...(selection.extraActions ?? [])]
+      : selection.target.type === "item" ? ITEM_ACTION_ORDER : PLAYER_ACTION_ORDER;
     const actions = order.filter((actionId) => freeActionConfig.actions[actionId]?.targets.includes(selection.target.type));
-    const primary = actions.slice(0, freeActionConfig.interface.recommendedActionLimit);
-    const extra = actions.slice(freeActionConfig.interface.recommendedActionLimit);
+    const recommendedCount = selection.recommendedActions?.length ?? freeActionConfig.interface.recommendedActionLimit;
+    const primary = actions.slice(0, recommendedCount);
+    const extra = actions.slice(recommendedCount);
     const renderActions = (actionIds: string[]) => (
       <div className="grid gap-2 sm:grid-cols-2">
         {actionIds.map((actionId) => {
@@ -966,6 +1030,39 @@ export default function Home() {
             {freeActionNotice.text}
           </p>
         )}
+      </div>
+    );
+  }
+
+  function renderEventNpcActions(selection: ActionSelection) {
+    const stateLabels: Record<string, string> = {
+      wounded: "重伤",
+      alive: "伤势已稳",
+      hostile: "敌对",
+      looted: "包袱已失",
+      missing: "已离开",
+      dead: "已死亡",
+    };
+    return (
+      <div className="mt-5 rounded-md border border-[#44533c] bg-[#101910] p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-4 text-left"
+          aria-expanded={activeActionTarget === selection.key}
+          onClick={() => {
+            setActiveActionTarget((current) => current === selection.key ? null : selection.key);
+            setFreeActionNotice(null);
+          }}
+        >
+          <span>
+            <span className="flex items-center gap-2 text-[#e7d399]"><Users className="h-4 w-4" />事件人物 · {selection.target.name}</span>
+            <span className="mt-1 block text-xs text-[#82968c]">
+              {stateLabels[selection.target.state ?? ""] ?? selection.target.state ?? "状态未知"} · 点击选择自由行动
+            </span>
+          </span>
+          <span className="rounded-full border border-[#5d6848] px-3 py-1 text-xs text-[#cbb875]">自由行动</span>
+        </button>
+        {renderFreeActionMenu(selection)}
       </div>
     );
   }
@@ -1135,6 +1232,7 @@ export default function Home() {
       .flatMap((entry) => (entry.inventory ?? []).filter((item) => item.quantity > 0))
       .filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
     const awaitingInheritance = !life && room.cycle > 1 && pastLives.length > 0;
+    const activeEventNpc = eventNpcActionSelection();
     return (
       <main className="world-grid min-h-screen px-4 py-5 sm:px-7 lg:px-10">
         <div className="mx-auto max-w-6xl">
@@ -1329,6 +1427,7 @@ export default function Home() {
                   life={life}
                   config={eventConfig}
                   timeCostDays={prologueConfig.timeSystem.costs.randomEventDays}
+                  npcActions={activeEventNpc ? renderEventNpcActions(activeEventNpc) : undefined}
                   onChoose={chooseEvent}
                   onContinue={continueEvent}
                 />

@@ -5,6 +5,7 @@ import type {
   PrologueLife,
   StatKey,
 } from "@/lib/prologue";
+import type { FreeActionOverride, FreeActionTargetType } from "@/lib/free-actions";
 
 export type EventOutcomeKey = "criticalFailure" | "failure" | "success" | "criticalSuccess";
 
@@ -76,6 +77,21 @@ export type RandomEvent = {
   tags: string[];
   intro: string;
   choices: EventChoice[];
+  interactable?: {
+    id: string;
+    name: string;
+    type: FreeActionTargetType;
+    level?: number;
+    stats?: Partial<FiveStats>;
+    baseDifficulty?: number;
+    relation?: number;
+    state?: string;
+    tags: string[];
+    traits?: Record<string, number>;
+    recommendedActions: string[];
+    extraActions: string[];
+    overrides?: Record<string, FreeActionOverride>;
+  };
 };
 
 export type EventItemDefinition = Omit<InventoryItem, "quantity" | "effects"> & {

@@ -293,6 +293,8 @@ export type PrologueLife = {
   timeline?: LifeTimeline;
   freeActionAttempts?: Record<string, number>;
   freeActionWorldMinutes?: number;
+  freeActionFlags?: Record<string, boolean | string | number>;
+  freeActionTargetStates?: Record<string, string>;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];

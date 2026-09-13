@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, ChevronRight, Dices, ScrollText, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   choiceRequirementMessage,
@@ -14,6 +15,7 @@ type EventSceneProps = {
   life: PrologueLife;
   config: EventLibraryConfig;
   timeCostDays: number;
+  npcActions?: ReactNode;
   onChoose(choiceId: string): void;
   onContinue(): void;
 };
@@ -26,7 +28,7 @@ const OUTCOME_LABELS = {
   fixed: "已决定",
 };
 
-export function EventScene({ life, config, timeCostDays, onChoose, onContinue }: EventSceneProps) {
+export function EventScene({ life, config, timeCostDays, npcActions, onChoose, onContinue }: EventSceneProps) {
   const adventure = life.adventure;
   if (!adventure) return null;
   const event = currentRandomEvent(life, config);
@@ -113,6 +115,8 @@ export function EventScene({ life, config, timeCostDays, onChoose, onContinue }:
             </span>
           </div>
           <p className="mt-5 leading-8 text-[#c1cac4]">{event.intro}</p>
+
+          {npcActions}
 
           <div className="mt-6 space-y-3">
             {event.choices.map((choice) => {

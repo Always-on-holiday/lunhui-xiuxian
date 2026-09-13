@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "title": "自由行动规则",
-    "status": "完整判定算法已接入背包物品与多人房间人物",
+    "status": "完整判定算法已接入背包物品、多人房间人物与事件 NPC",
     "design": "通用动作 + 对象标签 + 特殊覆写 + 世界后果"
   },
   "interface": {
@@ -564,7 +564,7 @@
     "npc": ["friendly", "neutral", "hostile", "merchant", "guard", "wounded", "restrained", "helpless", "important", "immortal", "witness"],
     "item": ["food", "herb", "toxic", "mineral", "flammable", "weapon", "armor", "accessory", "talisman", "quest_key", "unique", "dangerous", "sentient"],
     "location": ["safe_zone", "settlement", "wilderness", "ruin", "sealed", "flammable", "guarded"],
-    "state": ["alive", "dead", "missing", "carried", "intact", "restrained", "helpless", "controlled", "hostile", "broken", "burning", "looted", "discarded"]
+    "state": ["alive", "wounded", "dead", "missing", "carried", "intact", "restrained", "helpless", "controlled", "hostile", "broken", "burning", "looted", "discarded"]
   },
   "numericTraits": {
     "concealment": "隐藏信息、陷阱或秘密的难度，建议 0—50",
