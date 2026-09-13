@@ -1,7 +1,18 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Copy, Dices, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles, Swords, Users, Zap } from "lucide-react";
+import { Archive, Check, Copy, Dices, Globe2, Heart, LogOut, Minus, Plus, RotateCcw, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -19,7 +30,9 @@ import {
 } from "@/lib/events";
 import {
   canTriggerSideQuest,
+  adjustBirthStat,
   chooseTraining,
+  finalizeBirthStats,
   type FiveStats,
   isPrologueConfig,
   itemWorksInContext,
@@ -56,6 +69,14 @@ type Session = {
   name: string;
 };
 
+type PastLifeArchiveEntry = {
+  id: string;
+  archivedAt: string;
+  playerName: string;
+  roomCode: string;
+  life: PrologueLife;
+};
+
 type ToolRegistration = {
   name: string;
   title: string;
@@ -71,6 +92,7 @@ type ModelContext = {
 
 const SESSION_KEY = "lunhui-xiuxian-session";
 const LIFE_KEY = "lunhui-xiuxian-prologue-v1";
+const PAST_LIVES_KEY = "lunhui-xiuxian-past-lives-v1";
 
 const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
   { key: "attack", label: "攻击" },
@@ -127,8 +149,10 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [life, setLife] = useState<PrologueLife | null>(null);
+  const [pastLives, setPastLives] = useState<PastLifeArchiveEntry[]>([]);
   const [itemNotice, setItemNotice] = useState("");
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
+  const statAllocationReady = life?.statAllocationFinalized !== false;
 
   useEffect(() => {
     void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
@@ -276,8 +300,12 @@ export default function Home() {
 
   useEffect(() => {
     let restored: PrologueLife | null = null;
+    let restoredPastLives: PastLifeArchiveEntry[] = [];
     if (!session) {
-      const timer = window.setTimeout(() => setLife(null), 0);
+      const timer = window.setTimeout(() => {
+        setLife(null);
+        setPastLives([]);
+      }, 0);
       return () => window.clearTimeout(timer);
     }
     const saved = localStorage.getItem(`${LIFE_KEY}:${session.playerId}`);
@@ -289,7 +317,27 @@ export default function Home() {
         localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
       }
     }
-    const timer = window.setTimeout(() => setLife(restored), 0);
+    const archived = localStorage.getItem(`${PAST_LIVES_KEY}:${session.playerId}`);
+    if (archived) {
+      try {
+        const candidate = JSON.parse(archived) as unknown;
+        restoredPastLives = Array.isArray(candidate)
+          ? candidate.filter((entry): entry is PastLifeArchiveEntry => Boolean(
+              entry
+                && typeof entry === "object"
+                && "id" in entry
+                && "archivedAt" in entry
+                && "life" in entry,
+            ))
+          : [];
+      } catch {
+        localStorage.removeItem(`${PAST_LIVES_KEY}:${session.playerId}`);
+      }
+    }
+    const timer = window.setTimeout(() => {
+      setLife(restored);
+      setPastLives(restoredPastLives);
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [session]);
 
@@ -393,13 +441,28 @@ export default function Home() {
   }
 
   function beginSideQuest() {
-    if (!life) return;
+    if (!life || !statAllocationReady) return;
     persistLife(triggerSideQuest(life));
   }
 
   function selectTraining(choiceId: string) {
-    if (!life) return;
+    if (!life || !statAllocationReady) return;
     persistLife(chooseTraining(life, choiceId, prologueConfig.training.choices));
+  }
+
+  function changeBirthStat(stat: keyof FiveStats, direction: 1 | -1) {
+    if (!life) return;
+    persistLife(adjustBirthStat(
+      life,
+      stat,
+      direction,
+      prologueConfig.birth.stats.allocationMaximumPerStat ?? 3,
+    ));
+  }
+
+  function confirmBirthStats() {
+    if (!life) return;
+    persistLife(finalizeBirthStats(life));
   }
 
   function prepareTrialItem(itemId: string) {
@@ -449,9 +512,36 @@ export default function Home() {
     persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
-  function restartLife() {
+  function reincarnateLife() {
+    if (!session || !life) return;
+    const archivedAt = new Date().toISOString();
+    const entry: PastLifeArchiveEntry = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      archivedAt,
+      playerName: session.name,
+      roomCode: session.code,
+      life,
+    };
+    const nextPastLives = [...pastLives, entry];
+    try {
+      localStorage.setItem(`${PAST_LIVES_KEY}:${session.playerId}`, JSON.stringify(nextPastLives));
+    } catch {
+      setItemNotice("本机存储空间不足，这一世尚未保存，请先不要转生。");
+      return;
+    }
+    localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+    setPastLives(nextPastLives);
+    setItemNotice("");
+    setLife(null);
+  }
+
+  function resetAllLives() {
     if (!session) return;
     localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+    localStorage.removeItem(`${PAST_LIVES_KEY}:${session.playerId}`);
+    setPastLives([]);
     setItemNotice("");
     setLife(null);
   }
@@ -513,17 +603,70 @@ export default function Home() {
 
           <div className="grid gap-5 lg:grid-cols-[1.35fr_0.82fr]">
             <section className="ink-panel min-h-[540px] rounded-lg border border-[#29443a] p-6 sm:p-8">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm tracking-[0.2em] text-[#7ea28f]">{content.world.location}</p>
                   <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">
-                    {life?.adventure ? `${life.adventure.stageName} · 当前事件` : life ? "这一世，从出生开始" : "命数未定，静候降生"}
+                    {life?.adventure
+                      ? `${life.adventure.stageName} · 第 ${pastLives.length + 1} 世`
+                      : life
+                        ? `第 ${pastLives.length + 1} 世，从出生开始`
+                        : "命数未定，静候降生"}
                   </h1>
                 </div>
                 {life ? (
-                  <Button variant="ghost" size="sm" onClick={restartLife} className="text-[#758a80] hover:bg-[#17352c] hover:text-white">
-                    重开本世
-                  </Button>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="border-[#4e674f] bg-transparent text-[#a7bfa9] hover:bg-[#17352c] hover:text-white">
+                          <Archive className="h-4 w-4" />
+                          {content.world.reincarnateButton}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="border-[#4a5f51] bg-[#0b1713] text-[#e5e9e3]">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-[#f0dfae]">{content.world.reincarnateConfirmTitle}</AlertDialogTitle>
+                          <AlertDialogDescription className="leading-6 text-[#9dafA5]">
+                            {content.world.reincarnateConfirmText}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="border-[#3b5147] bg-transparent text-[#aebdb5] hover:bg-[#14241f] hover:text-white">
+                            {content.world.cancelButton}
+                          </AlertDialogCancel>
+                          <AlertDialogAction onClick={reincarnateLife} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                            <RotateCcw className="h-4 w-4" />
+                            {content.world.reincarnateConfirmButton}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="text-[#b17e75] hover:bg-[#321d19] hover:text-[#f1b2a5]">
+                          <Trash2 className="h-4 w-4" />
+                          {content.world.resetAllButton}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="border-[#69443e] bg-[#180e0c] text-[#eee5e2]">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-[#f0b5a9]">{content.world.resetAllConfirmTitle}</AlertDialogTitle>
+                          <AlertDialogDescription className="leading-6 text-[#bda39d]">
+                            {content.world.resetAllConfirmText}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="border-[#5b433e] bg-transparent text-[#c1b2ae] hover:bg-[#281714] hover:text-white">
+                            {content.world.cancelButton}
+                          </AlertDialogCancel>
+                          <AlertDialogAction onClick={resetAllLives} className="bg-[#a95043] text-white hover:bg-[#bd6052]">
+                            {content.world.resetAllConfirmButton}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 ) : (
                   <Sparkles className="slow-pulse h-6 w-6 text-[#d6b66d]" />
                 )}
@@ -539,6 +682,27 @@ export default function Home() {
                     <p className="text-sm text-[#789087]">{prologueConfig.intro.flowLabel}</p>
                     <p className="mt-2 leading-7 text-[#d9dfd7]">{prologueConfig.intro.flowText}</p>
                   </div>
+                  {pastLives.length > 0 && (
+                    <details className="rounded-md border border-[#3b513f] bg-[#0b1813] p-4">
+                      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-[#c8d3cc]">
+                        <Archive className="h-4 w-4 text-[#d6b66d]" />
+                        {content.world.pastLivesLabel} · {pastLives.length} {content.world.pastLivesSaved}
+                      </summary>
+                      <div className="mt-4 space-y-2 border-t border-[#29443a] pt-4">
+                        {[...pastLives].reverse().slice(0, 5).map((entry, index) => (
+                          <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#263d34] px-3 py-2 text-sm">
+                            <span className="text-[#dfcf9f]">
+                              第 {pastLives.length - index} 世 · {entry.life.realm} {entry.life.level} 级 · {entry.life.root.name}
+                            </span>
+                            <span className="text-xs text-[#71847a]">
+                              履历 {entry.life.adventure?.history.length ?? 0} 条
+                            </span>
+                          </div>
+                        ))}
+                        <p className="text-xs text-[#71847a]">{content.world.nextLifeHint}</p>
+                      </div>
+                    </details>
+                  )}
                   <Button onClick={beginLife} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
                     <Dices className="h-4 w-4" />
                     {prologueConfig.intro.rollButton}
@@ -557,7 +721,15 @@ export default function Home() {
                     <p className="leading-8 text-[#b8c5bd]">{life.birthText}</p>
                     {life.origin && (
                       <div className="mt-4 rounded-md border border-[#314b40] bg-[#091511] p-4">
-                        <p className="text-sm tracking-[0.16em] text-[#7f9589]">{prologueConfig.character.originResultLabel}</p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm tracking-[0.16em] text-[#7f9589]">{prologueConfig.character.originResultLabel}</p>
+                          {life.originRoll && (
+                            <span className="flex items-center gap-1 rounded-full border border-[#40584c] px-2.5 py-1 font-mono text-xs text-[#a8b8af]">
+                              <Dices className="h-3.5 w-3.5" />
+                              {prologueConfig.character.originRollLabel} {life.originRoll.value} / {life.originRoll.maximum}
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 text-lg text-[#e9d9a6]">{life.origin.name}</p>
                         <p className="mt-2 text-sm leading-6 text-[#9caaa2]">{life.origin.description}</p>
                       </div>
@@ -568,12 +740,74 @@ export default function Home() {
                           <p className="text-sm tracking-[0.18em] text-[#a8996e]">测灵结果</p>
                           <h2 className="mt-1 text-xl text-[#efd48d]">{life.root.name}</h2>
                         </div>
-                        <span className="rounded-full border border-[#65583b] px-3 py-1 text-xs text-[#cabb91]">{life.root.growth}</span>
                       </div>
                       <p className="mt-4 leading-7 text-[#c5c7b9]">{life.root.reception}</p>
                       <p className="mt-3 text-sm text-[#91a39a]">天赋「{life.root.talent}」：{life.root.talentText}</p>
                     </div>
                   </div>
+
+                  {!statAllocationReady && (
+                    <div className="rounded-md border border-[#5a4c2d] bg-[#15150e] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm tracking-[0.16em] text-[#a8996e]">初始塑命</p>
+                          <h2 className="mt-1 text-xl text-[#efd48d]">{prologueConfig.character.allocationTitle}</h2>
+                        </div>
+                        <span className="rounded-full bg-[#3c321c] px-3 py-1 text-sm text-[#efd48d]">
+                          {prologueConfig.character.allocationRemainingLabel}：{life.unspentStatPoints ?? 0}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[#aeb8b1]">{prologueConfig.character.allocationDescription}</p>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-5">
+                        {STAT_LABELS.map(({ key, label }) => {
+                          const allocated = life.statAllocation?.[key] ?? 0;
+                          const maximum = prologueConfig.birth.stats.allocationMaximumPerStat ?? 3;
+                          return (
+                            <div key={key} className="rounded border border-[#3b4d43] bg-[#09120f] p-3 text-center">
+                              <p className="text-xs text-[#87988f]">{label}</p>
+                              <p className="mt-1 font-mono text-lg text-[#f0dfae]">
+                                {life.stats[key]}
+                                {allocated > 0 && <span className="ml-1 text-xs text-[#76b995]">(+{allocated})</span>}
+                              </p>
+                              <div className="mt-2 flex justify-center gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="outline"
+                                  disabled={allocated <= 0}
+                                  onClick={() => changeBirthStat(key, -1)}
+                                  className="border-[#3b5147] bg-transparent text-[#aebdb5] hover:bg-[#17352c]"
+                                  aria-label={`减少${label}`}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="outline"
+                                  disabled={(life.unspentStatPoints ?? 0) <= 0 || allocated >= maximum}
+                                  onClick={() => changeBirthStat(key, 1)}
+                                  className="border-[#6a5930] bg-transparent text-[#e1c878] hover:bg-[#342d1b]"
+                                  aria-label={`增加${label}`}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={(life.unspentStatPoints ?? 0) > 0}
+                        onClick={confirmBirthStats}
+                        className="mt-4 bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]"
+                      >
+                        <Check className="h-4 w-4" />
+                        {prologueConfig.character.allocationConfirmButton}
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="rounded-md border border-[#35584a] bg-[#0a1a15] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -598,11 +832,17 @@ export default function Home() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={life.sideQuestTriggered || !sideQuestUnlocked}
+                        disabled={!statAllocationReady || life.sideQuestTriggered || !sideQuestUnlocked}
                         onClick={beginSideQuest}
                         className="border-[#466155] bg-transparent text-[#bdc8c1] hover:bg-[#17352c] hover:text-white"
                       >
-                        {life.sideQuestTriggered ? "线索已收下" : sideQuestUnlocked ? "触发线索" : "尚未解锁"}
+                        {!statAllocationReady
+                          ? "先完成命格加点"
+                          : life.sideQuestTriggered
+                            ? "线索已收下"
+                            : sideQuestUnlocked
+                              ? "触发线索"
+                              : "尚未解锁"}
                       </Button>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-[#899b92]">解锁条件：{life.sideQuest.condition}</p>
@@ -619,7 +859,8 @@ export default function Home() {
                             key={choice.id}
                             type="button"
                             onClick={() => selectTraining(choice.id)}
-                            className="choice-card rounded-md border border-[#314b40] bg-[#091511] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b]"
+                            disabled={!statAllocationReady}
+                            className="choice-card rounded-md border border-[#314b40] bg-[#091511] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
                           >
                             <span className="text-[#ead9a5]">{choice.title}</span>
                             <span className="mt-2 block text-sm leading-6 text-[#8fa097]">{choice.description}</span>
@@ -691,6 +932,11 @@ export default function Home() {
                         </div>
                       </div>
                     </div>
+                    {life.statAllocationFinalized && (
+                      <p className="mt-3 text-xs leading-5 text-[#75887e]">
+                        {prologueConfig.character.allocationCompleteText}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <p className="mt-4 text-sm leading-6 text-[#71847a]">Roll 点后，这里只展示战斗真正需要的五维与两条资源。</p>

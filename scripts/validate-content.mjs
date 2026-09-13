@@ -124,6 +124,32 @@ function validateEventLibrary(config) {
   }
 }
 
+function validatePrologue(config) {
+  const location = "public/游戏内容/序章规则.json";
+  if (!config?.birth?.stats || !Array.isArray(config?.character?.origins)) {
+    fail(location, "缺少出生属性或出身配置");
+    return;
+  }
+  const points = config.birth.stats.allocationPoints;
+  const maximum = config.birth.stats.allocationMaximumPerStat;
+  if (!Number.isInteger(points) || points < 0) fail(`${location}#birth.stats.allocationPoints`, "命格点必须是非负整数");
+  if (!Number.isInteger(maximum) || maximum < 1) fail(`${location}#birth.stats.allocationMaximumPerStat`, "单项投入上限必须是正整数");
+  if (points > maximum * 5) fail(`${location}#birth.stats`, "命格点超过五项可投入的总上限，玩家将无法完成加点");
+
+  const originIds = new Set();
+  let totalWeight = 0;
+  for (const origin of config.character.origins) {
+    if (!origin.id || originIds.has(origin.id)) fail(`${location}#character.origins`, `出身 id 缺失或重复：${origin.id ?? "空"}`);
+    originIds.add(origin.id);
+    if (!Number.isFinite(origin.weight) || origin.weight <= 0) fail(`${location}#character.origins.${origin.id}.weight`, "Roll 权重必须是正数");
+    totalWeight += Number(origin.weight) || 0;
+    if (origin.hiddenTalentId && !config.character.hiddenTalents?.[origin.hiddenTalentId]) {
+      fail(`${location}#character.origins.${origin.id}.hiddenTalentId`, `引用了未知隐藏天赋 ${origin.hiddenTalentId}`);
+    }
+  }
+  if (totalWeight <= 0) fail(`${location}#character.origins`, "出身 Roll 总权重必须大于 0");
+}
+
 function validateFreeActionObjects(content, freeConfig) {
   const location = "public/游戏内容/自由行动/内容对象示例.json";
   if (!content || !freeConfig?.actions) return;
@@ -177,6 +203,7 @@ validateFreeActionObjects(
   freeActionConfig,
 );
 validateEventLibrary(parsed.get(path.normalize(path.join(contentRoot, "随机事件", "01-新手村.json"))));
+validatePrologue(parsed.get(path.normalize(path.join(contentRoot, "序章规则.json"))));
 
 if (errors.length > 0) {
   console.error(`内容检查失败，共 ${errors.length} 项：`);

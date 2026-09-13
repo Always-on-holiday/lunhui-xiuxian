@@ -156,9 +156,27 @@ export function EventScene({ life, config, onChoose, onContinue }: EventScenePro
           </summary>
           <div className="mt-4 space-y-3 border-t border-[#29443a] pt-4">
             {[...adventure.history].reverse().map((entry) => (
-              <div key={entry.resolutionId} className="text-sm">
+              <div key={entry.resolutionId} className="rounded border border-[#263d34] bg-[#091511] p-3 text-sm">
                 <p className="text-[#ddc98f]">{entry.title} · {OUTCOME_LABELS[entry.outcome]}</p>
                 <p className="mt-1 leading-6 text-[#84958c]">{entry.resultText}</p>
+                {entry.effectSummaries && entry.effectSummaries.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-[#71847a]">数值变化</span>
+                    {entry.effectSummaries.map((summary, index) => {
+                      const isLoss = /-\d|失去|消耗/.test(summary);
+                      return (
+                        <span
+                          key={`${entry.resolutionId}-${summary}-${index}`}
+                          className={isLoss
+                            ? "rounded bg-[#3a201d] px-2 py-1 text-xs text-[#e3a092]"
+                            : "rounded bg-[#163527] px-2 py-1 text-xs text-[#9fd2b5]"}
+                        >
+                          {summary}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
           </div>

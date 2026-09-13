@@ -164,12 +164,23 @@ export type PrologueConfig = {
     level: number;
     realm: string;
     story: string;
-    stats: VitalRules & { minimum: number; maximum: number };
+    stats: VitalRules & {
+      minimum: number;
+      maximum: number;
+      allocationPoints?: number;
+      allocationMaximumPerStat?: number;
+    };
     elements: string[];
     rootRoll: Array<{ count: number; weight: number }>;
   };
   character: {
     originResultLabel: string;
+    originRollLabel: string;
+    allocationTitle: string;
+    allocationDescription: string;
+    allocationRemainingLabel: string;
+    allocationConfirmButton: string;
+    allocationCompleteText: string;
     assetsTitle: string;
     spiritStoneLabel: string;
     inventoryTab: string;
@@ -245,6 +256,10 @@ export type PrologueLife = {
   mainQuest: Quest;
   sideQuest: Quest;
   sideQuestTriggered: boolean;
+  originRoll?: { value: number; maximum: number };
+  unspentStatPoints?: number;
+  statAllocation?: FiveStats;
+  statAllocationFinalized?: boolean;
   training?: TrainingChoice;
   battle?: BattleReport;
   adventure?: AdventureState;
@@ -289,17 +304,22 @@ function shuffledElements(elements: string[], count: number) {
   return values.slice(0, count);
 }
 
-function rollWeighted<T extends { weight: number }>(options: T[]) {
+function rollWeightedWithResult<T extends { weight: number }>(options: T[]) {
   const usable = options.filter((item) => item.weight > 0);
   const totalWeight = usable.reduce((sum, item) => sum + item.weight, 0);
-  if (totalWeight <= 0) return options[0];
+  if (totalWeight <= 0) return { option: options[0], roll: 0, maximum: 0 };
 
-  let roll = randomInt(1, totalWeight);
+  const originalRoll = randomInt(1, totalWeight);
+  let roll = originalRoll;
   for (const option of usable) {
     roll -= option.weight;
-    if (roll <= 0) return option;
+    if (roll <= 0) return { option, roll: originalRoll, maximum: totalWeight };
   }
-  return usable.at(-1);
+  return { option: usable.at(-1), roll: originalRoll, maximum: totalWeight };
+}
+
+function rollWeighted<T extends { weight: number }>(options: T[]) {
+  return rollWeightedWithResult(options).option;
 }
 
 function rollRootCount(options: PrologueConfig["birth"]["rootRoll"]) {
@@ -368,7 +388,8 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
   const count = rollRootCount(config.birth.rootRoll);
   const profile = config.rootProfiles[String(count)] ?? Object.values(config.rootProfiles)[0];
   if (!profile) throw new Error("序章规则中没有可用的灵根配置。");
-  const originConfig = rollWeighted(config.character.origins);
+  const originResult = rollWeightedWithResult(config.character.origins);
+  const originConfig = originResult.option;
   if (!originConfig) throw new Error("序章规则中没有可用的出身配置。");
 
   const elements = shuffledElements(config.birth.elements, count);
@@ -452,7 +473,48 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     mainQuest: { ...config.mainQuest },
     sideQuest: { ...sideQuest },
     sideQuestTriggered: false,
+    originRoll: { value: originResult.roll, maximum: originResult.maximum },
+    unspentStatPoints: config.birth.stats.allocationPoints ?? 5,
+    statAllocation: {
+      attack: 0,
+      defense: 0,
+      speed: 0,
+      intelligence: 0,
+      proficiency: 0,
+    },
+    statAllocationFinalized: (config.birth.stats.allocationPoints ?? 5) <= 0,
   };
+}
+
+export function adjustBirthStat(
+  life: PrologueLife,
+  stat: StatKey,
+  direction: 1 | -1,
+  maximumPerStat = 3,
+) {
+  if (life.statAllocationFinalized) return life;
+  const allocation: FiveStats = {
+    attack: life.statAllocation?.attack ?? 0,
+    defense: life.statAllocation?.defense ?? 0,
+    speed: life.statAllocation?.speed ?? 0,
+    intelligence: life.statAllocation?.intelligence ?? 0,
+    proficiency: life.statAllocation?.proficiency ?? 0,
+  };
+  const remaining = life.unspentStatPoints ?? 0;
+  if (direction > 0 && (remaining <= 0 || allocation[stat] >= maximumPerStat)) return life;
+  if (direction < 0 && allocation[stat] <= 0) return life;
+
+  const adjusted = applyGains(life, { [stat]: direction });
+  return {
+    ...adjusted,
+    unspentStatPoints: remaining - direction,
+    statAllocation: { ...allocation, [stat]: allocation[stat] + direction },
+  };
+}
+
+export function finalizeBirthStats(life: PrologueLife) {
+  if ((life.unspentStatPoints ?? 0) > 0) return life;
+  return { ...life, statAllocationFinalized: true };
 }
 
 export function triggerSideQuest(life: PrologueLife) {

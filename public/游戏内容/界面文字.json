@@ -60,6 +60,18 @@
     "currentPlayer": "你",
     "emptySlot": "等待有缘人",
     "copyInvite": "复制邀请链接",
-    "copiedInvite": "邀请链接已复制"
+    "copiedInvite": "邀请链接已复制",
+    "reincarnateButton": "保存此世并转世重修",
+    "resetAllButton": "完全重开",
+    "reincarnateConfirmTitle": "是否确定转生？",
+    "reincarnateConfirmText": "这一世的角色、道具、功法和履历会保存到本机轮回册，随后重新投胎并继续留在当前世界。",
+    "reincarnateConfirmButton": "确定转生",
+    "resetAllConfirmTitle": "是否确定完全重开？",
+    "resetAllConfirmText": "当前这一世和此前保存的全部前世记录都会从本机删除，且无法恢复。房间世界不会因此重置。",
+    "resetAllConfirmButton": "确定全部重开",
+    "cancelButton": "再想想",
+    "pastLivesLabel": "轮回册",
+    "pastLivesSaved": "世已保存于本机",
+    "nextLifeHint": "下一世仍会在当前世界降生。"
   }
 }

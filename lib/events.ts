@@ -149,6 +149,7 @@ export type EventHistoryEntry = {
   choiceText: string;
   outcome: EventOutcomeKey | "fixed";
   resultText: string;
+  effectSummaries?: string[];
 };
 
 export type EventCalculation = {
@@ -519,7 +520,10 @@ export function resolveEventChoice(
   };
 
   const resolvedCount = adventure.resolvedCount + 1;
+  const newLevel = milestoneLevel(config, resolvedCount, next.level);
   const resolutionId = makeId();
+  const effectSummaries = allEffects.map((effect) => effectSummary(effect, config)).filter(Boolean);
+  if (newLevel !== next.level) effectSummaries.push(`等级 ${next.level} → ${newLevel}`);
   const historyEntry: EventHistoryEntry = {
     resolutionId,
     eventId: event.id,
@@ -527,15 +531,15 @@ export function resolveEventChoice(
     choiceText: choice.text,
     outcome: outcomeKey,
     resultText: outcome.text,
+    effectSummaries,
   };
   const resolution: EventResolution = {
     ...historyEntry,
     itemMessages,
     uselessItemNames,
-    effectSummaries: allEffects.map((effect) => effectSummary(effect, config)).filter(Boolean),
+    effectSummaries,
     calculation,
   };
-  const newLevel = milestoneLevel(config, resolvedCount, next.level);
   return {
     ...next,
     level: newLevel,

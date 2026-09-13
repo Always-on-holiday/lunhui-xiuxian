@@ -1,18 +1,20 @@
 {
   "meta": { "version": 1, "title": "出生与锻体序章" },
   "intro": {
-    "description": "世界先替你决定出身、五维与灵根。灵根数量会改变前期处境、天赋和可触发支线，但不会锁死最终潜力。",
+    "description": "世界先替你掷定出身、五维与灵根，再由你分配命格点。灵根数量会改变前期处境、天赋和可触发支线，但不会锁死最终潜力。",
     "flowLabel": "本次试玩流程",
-    "flowText": "出生 Roll 点 → 童年选择 → 支线线索 → 木傀自动战斗 → 直接结算",
+    "flowText": "出身与灵根 Roll 点 → 自由分配命格 → 童年选择 → 支线线索 → 木傀自动战斗 → 直接结算",
     "rollButton": "掷定此生命数"
   },
   "birth": {
     "level": 1,
     "realm": "锻体初期",
-    "story": "你出生在青冥洲北境的一户凡人家中。第七年，山门测灵舟停在了村口。",
+    "story": "你降生在青冥洲北境。家世与际遇各不相同，但第七年那日，青崖门的测灵舟同样停在了村口。",
     "stats": {
       "minimum": 8,
       "maximum": 11,
+      "allocationPoints": 5,
+      "allocationMaximumPerStat": 3,
       "healthBase": 34,
       "healthPerDefense": 3,
       "spiritBase": 18,
@@ -30,6 +32,12 @@
   },
   "character": {
     "originResultLabel": "出身",
+    "originRollLabel": "出身 Roll",
+    "allocationTitle": "命格加点",
+    "allocationDescription": "基础命数与出身已经掷定。再把可支配点数投入五维，决定这一世最初擅长的方向。",
+    "allocationRemainingLabel": "剩余命格点",
+    "allocationConfirmButton": "确认此生命格",
+    "allocationCompleteText": "命格已定，之后获得的属性变化将写入此世履历。",
     "assetsTitle": "行囊与所学",
     "spiritStoneLabel": "灵石",
     "inventoryTab": "背包",
