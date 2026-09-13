@@ -1,0 +1,197 @@
+{
+  "meta": {
+    "version": 1,
+    "title": "残魂、复活与轮回规则"
+  },
+  "death": {
+    "title": "身死道消，魂犹未散",
+    "summary": "单人死亡后留在当前世界成为残魂；存活玩家可以设法复活。只有同界修士全部死亡，世界才会回到起点并进入下一周目。",
+    "deadlineDays": 8,
+    "reviveHealthPercent": 45,
+    "reviveSpiritPercent": 35,
+    "minimumSpiritFloorPercent": 25,
+    "maximumDrainPercent": 10,
+    "expiredTitle": "执念残魂",
+    "expiredText": "复活期限已过，但你不会退出游戏。残魂能力增强，复活所需魂力也有所提高。",
+    "testDeathButton": "试演身死",
+    "testDeathHint": "当前事件库尚无必死事件，可用此按钮测试完整残魂与轮回流程。",
+    "confirmTitle": "是否让此身归魂？",
+    "confirmText": "你将保留死亡前的境界、功法和履历，以残魂身份继续参与世界；若所有玩家均死亡，则立刻进入下一周目。",
+    "confirmButton": "确认身死"
+  },
+  "soul": {
+    "panelTitle": "残魂游世",
+    "powerLabel": "魂力",
+    "deadlineLabel": "复活余限",
+    "actionReady": "今日尚可行动",
+    "actionSpent": "今日已经行动",
+    "noLivingTarget": "同界已无生者，天道即将重启此世。",
+    "historyTitle": "残魂履历",
+    "actions": [
+      {
+        "id": "dream",
+        "title": "托梦",
+        "description": "向存活同伴送去一句模糊提示。",
+        "target": "living",
+        "powerGain": 1,
+        "resultText": "你的念头越过阴阳，在对方梦中留下了一道模糊影子。"
+      },
+      {
+        "id": "scout",
+        "title": "探查",
+        "description": "以魂体穿过阻碍，替同伴寻找复活线索。",
+        "target": "none",
+        "powerGain": 1,
+        "resultText": "你循着阴气游荡，记下了一处可能举行招魂仪式的地方。"
+      },
+      {
+        "id": "possess",
+        "title": "附物",
+        "description": "寄宿在遗物中，为下一次复活积蓄力量。",
+        "target": "none",
+        "powerGain": 2,
+        "resultText": "你的魂魄暂时依附在遗物上，消散的速度慢了下来。"
+      },
+      {
+        "id": "disturb",
+        "title": "扰乱",
+        "description": "制造阴风与异响，干扰世界中的敌意存在。",
+        "target": "none",
+        "powerGain": 1,
+        "resultText": "阴风卷过远处山道，某些暗中窥伺的东西暂时退去了。"
+      },
+      {
+        "id": "siphon",
+        "title": "吸取灵力",
+        "description": "从一名生者处吸取少量灵力。不会将对方吸到安全线以下。",
+        "target": "living",
+        "powerGain": 2,
+        "baseSpiritDrain": 5,
+        "expiredSpiritDrainBonus": 2,
+        "resultText": "一缕灵力被阴气牵引而来。你更加凝实，却也欠下了一分因果。"
+      },
+      {
+        "id": "rest",
+        "title": "保持沉寂",
+        "description": "不惊扰任何人，安静凝聚自己的残魂。",
+        "target": "none",
+        "powerGain": 2,
+        "resultText": "你收束所有执念，在寂静中重新凝聚魂光。"
+      }
+    ]
+  },
+  "revival": {
+    "title": "助其还阳",
+    "summary": "任意满足一条路线即可复活。复活者返回死亡前的境界，并获得一条死亡命格。",
+    "methods": [
+      {
+        "id": "spirit_stones",
+        "title": "请人招魂",
+        "description": "由施救者支付灵石，立刻完成招魂。",
+        "actorCost": { "spiritStones": 20 }
+      },
+      {
+        "id": "share_spirit",
+        "title": "分灵续命",
+        "description": "由施救者献出部分当前灵力。",
+        "actorCost": { "spirit": 12 }
+      },
+      {
+        "id": "soul_wood",
+        "title": "养魂木引魂",
+        "description": "消耗一块养魂木，不再额外消耗灵力。",
+        "actorCost": { "itemId": "soul_wood", "itemQuantity": 1 }
+      },
+      {
+        "id": "self_return",
+        "title": "聚魂自返",
+        "description": "残魂积累足够魂力后自行还阳。",
+        "selfOnly": true,
+        "soulPowerCost": 4,
+        "expiredSoulPowerCost": 6
+      }
+    ],
+    "fateMarks": [
+      {
+        "id": "returned_from_death",
+        "name": "死里还生",
+        "description": "你已经跨过一次生死边界；致死事件更容易显露预兆。"
+      },
+      {
+        "id": "fractured_soul",
+        "name": "魂魄有缺",
+        "description": "更容易察觉鬼魂与阴气，也更容易遭遇夺舍相关事件。"
+      },
+      {
+        "id": "life_debt",
+        "name": "欠命之恩",
+        "description": "救命之恩化作因果，未来会开启与施救者有关的事件。"
+      },
+      {
+        "id": "yin_touched",
+        "name": "阴气缠身",
+        "description": "阳属性修行略受影响，但鬼道与残魂事件获得额外机会。"
+      }
+    ]
+  },
+  "inheritance": {
+    "title": "轮回继承",
+    "summary": "天地已经回到起点。你可以从前世各携带一部功法、一件物品和一段记忆，也可以主动放弃其中任意一项。",
+    "artLabel": "一部功法",
+    "itemLabel": "一件物品",
+    "memoryLabel": "一段记忆",
+    "noneLabel": "不继承",
+    "beginButton": "携前尘再入轮回",
+    "legacyArts": [
+      {
+        "id": "soul_search_art",
+        "name": "搜魂术·残篇",
+        "grade": "禁术",
+        "description": "可窥探神魂中最深的记忆。完成过一次新手村阶段后，便可将这段领悟带入下一世。",
+        "unlock": { "stageComplete": true }
+      }
+    ],
+    "memories": [
+      {
+        "id": "village_repetition",
+        "name": "重复的村门",
+        "description": "你记得守门人第一次看见你的神情，也记得他说过的每一个字。"
+      },
+      {
+        "id": "death_memory",
+        "name": "临死一念",
+        "description": "前世最后一刻的感受仍然清晰，某些致命风险会提前显露。"
+      },
+      {
+        "id": "road_memory",
+        "name": "旧路方位",
+        "description": "你记得青石村附近的隐秘岔路，可以更早接触隐藏地点。"
+      }
+    ]
+  },
+  "cycleSecret": {
+    "id": "gatekeeper_hidden_memory",
+    "title": "似曾相识的守门人",
+    "intro": "守门老人照例抬手拦住你。那张脸与前世别无二致，但他看向你的眼神，似乎比记忆里多停留了一瞬。",
+    "requiredCycle": 2,
+    "requiredArtId": "soul_search_art",
+    "eyebrow": "轮回异闻 · 仅此世可见",
+    "choices": [
+      {
+        "id": "talk",
+        "title": "照旧与他交谈",
+        "resultTitle": "旧话重提",
+        "resultText": "老人说出了与前世一模一样的话。直到你转身，他才在身后低声问了一句：这次还要走那条路吗？"
+      },
+      {
+        "id": "soul_search",
+        "title": "施展搜魂术",
+        "requiresArtId": "soul_search_art",
+        "resultTitle": "门后之门",
+        "resultText": "你在他的识海深处看见无数次相同的开门。他并非普通村民，而是被留在每次轮回起点的守界残念。隐藏主线“谁在重启世界”已经开启。",
+        "setFlag": "hidden_cycle_keeper"
+      }
+    ],
+    "continueButton": "记住这一幕，继续入世"
+  }
+}

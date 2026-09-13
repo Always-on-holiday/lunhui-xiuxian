@@ -9,7 +9,7 @@ import type {
 export type EventOutcomeKey = "criticalFailure" | "failure" | "success" | "criticalSuccess";
 
 type Requirement = {
-  type: "spiritStones" | "flag";
+  type: "spiritStones" | "flag" | "cycle" | "cultivationArt" | "item" | "memory";
   minimum?: number;
   id?: string;
   value?: boolean;
@@ -308,7 +308,11 @@ export function startVillageAdventure(
     completedEventIds: [],
     recentEventIds: [],
     selectedItemIds: [],
-    flags: { main_birth_complete: true, main_trial_complete: true },
+    flags: {
+      main_birth_complete: true,
+      main_trial_complete: true,
+      ...(life.cycleSecret?.flag ? { [life.cycleSecret.flag]: true } : {}),
+    },
     history: [],
     stageComplete: false,
   };
@@ -335,6 +339,18 @@ export function choiceRequirementMessage(choice: EventChoice, life: PrologueLife
     }
     if (requirement.type === "flag" && life.adventure?.flags[requirement.id ?? ""] !== requirement.value) {
       return "尚未满足事件条件";
+    }
+    if (requirement.type === "cycle" && (life.cycle ?? 1) < (requirement.minimum ?? 1)) {
+      return `需要进入第 ${requirement.minimum ?? 1} 世`;
+    }
+    if (requirement.type === "cultivationArt" && !life.cultivationArts?.some((art) => art.id === requirement.id)) {
+      return "尚未继承所需功法";
+    }
+    if (requirement.type === "item" && !life.inventory?.some((item) => item.id === requirement.id && item.quantity >= (requirement.minimum ?? 1))) {
+      return "缺少所需道具";
+    }
+    if (requirement.type === "memory" && life.inheritedMemory?.id !== requirement.id) {
+      return "前世记忆尚未苏醒";
     }
   }
   return "";

@@ -16,7 +16,7 @@
     "description": "创建一个世界，把六位房间码发给好友。最多四名玩家可以进入同一片天地，见证彼此的轮回。",
     "highlights": [
       { "value": "四人", "label": "同界" },
-      { "value": "死亡", "label": "转生" },
+      { "value": "残魂", "label": "待复活" },
       { "value": "永生", "label": "终局" }
     ],
     "createTab": "开辟世界",
@@ -53,7 +53,7 @@
       "目前开放的是联机房间原型：好友使用同一房间码进入后，会出现在右侧同界修士名录中。"
     ],
     "noticeTitle": "天道告示",
-    "noticeText": "修炼、奇遇、自动战斗和死亡转生将在下一阶段接入。此版本先验证四人进入同一世界。",
+    "noticeText": "当前开放出生、随机事件、自动判定、残魂复活和多人轮回测试。世界持续运行，只有全员死亡才会重回起点。",
     "playersTitle": "同界修士",
     "hostRole": "界主",
     "playerRole": "游方修士",
@@ -61,10 +61,10 @@
     "emptySlot": "等待有缘人",
     "copyInvite": "复制邀请链接",
     "copiedInvite": "邀请链接已复制",
-    "reincarnateButton": "保存此世并转世重修",
+    "reincarnateButton": "试演身死",
     "resetAllButton": "完全重开",
     "reincarnateConfirmTitle": "是否确定转生？",
-    "reincarnateConfirmText": "这一世的角色、道具、功法和履历会保存到本机轮回册，随后重新投胎并继续留在当前世界。",
+    "reincarnateConfirmText": "此身死亡后会成为残魂，等待同伴或自己完成复活条件；只有全员死亡才会进入下一周目。",
     "reincarnateConfirmButton": "确定转生",
     "resetAllConfirmTitle": "是否确定完全重开？",
     "resetAllConfirmText": "当前这一世和此前保存的全部前世记录都会从本机删除，且无法恢复。房间世界不会因此重置。",
@@ -72,6 +72,6 @@
     "cancelButton": "再想想",
     "pastLivesLabel": "轮回册",
     "pastLivesSaved": "世已保存于本机",
-    "nextLifeHint": "下一世仍会在当前世界降生。"
+    "nextLifeHint": "全员死亡后可从前世各继承一部功法、一件物品和一段记忆。"
   }
 }

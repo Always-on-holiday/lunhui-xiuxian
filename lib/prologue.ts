@@ -1,4 +1,12 @@
 import type { AdventureState } from "@/lib/events";
+import type {
+  CycleSecretState,
+  DeathState,
+  FateMark,
+  InheritedMemory,
+  LifeInheritance,
+} from "@/lib/reincarnation";
+import { applyInheritance } from "@/lib/reincarnation";
 
 export type StatKey = "attack" | "defense" | "speed" | "intelligence" | "proficiency";
 
@@ -274,6 +282,12 @@ export type PrologueLife = {
   training?: TrainingChoice;
   battle?: BattleReport;
   adventure?: AdventureState;
+  cycle?: number;
+  deathState?: DeathState;
+  deathMarks?: FateMark[];
+  inheritedMemory?: InheritedMemory;
+  inheritance?: LifeInheritance;
+  cycleSecret?: CycleSecretState;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
@@ -395,7 +409,7 @@ export function isPrologueConfig(value: unknown): value is PrologueConfig {
   );
 }
 
-export function rollBirth(config: PrologueConfig): PrologueLife {
+export function rollBirth(config: PrologueConfig, inheritance?: LifeInheritance, cycle = 1): PrologueLife {
   const count = rollRootCount(config.birth.rootRoll);
   const profile = config.rootProfiles[String(count)] ?? Object.values(config.rootProfiles)[0];
   if (!profile) throw new Error("序章规则中没有可用的灵根配置。");
@@ -451,7 +465,7 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     ? config.character.hiddenTalents[originConfig.hiddenTalentId]
     : undefined;
 
-  return {
+  return applyInheritance({
     version: 1,
     level: config.birth.level,
     realm: config.birth.realm,
@@ -495,7 +509,7 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     },
     statAllocationFinalized: (config.birth.stats.allocationPoints ?? 5) <= 0,
     prologueStep: "origin",
-  };
+  }, inheritance, cycle);
 }
 
 export function currentBirthStep(life: PrologueLife): BirthStep {

@@ -47,3 +47,11 @@ forceOutcome 可以让特定道具或灵根直接触发奇效；checkBonus 是�
 - 支线、战斗经验、闭关和丹药暂不启用。
 - 不生成高于玩家 3 级的敌人，也不允许超出本阶段 10 级。
 - 可能致命的高风险行为必须由玩家明确选择，不做无提示强杀。
+周目与继承条件
+--------------
+选项 requirements 除了 spiritStones 和 flag，还可以使用：
+- { "type": "cycle", "minimum": 2 }：至少二周目。
+- { "type": "cultivationArt", "id": "soul_search_art" }：持有指定功法。
+- { "type": "item", "id": "stone_gate_fragment", "minimum": 1 }：持有指定数量道具。
+- { "type": "memory", "id": "village_repetition" }：继承指定前世记忆。
+这些条件不满足时，玩家会看见选项但无法点击，并得到简短原因提示。

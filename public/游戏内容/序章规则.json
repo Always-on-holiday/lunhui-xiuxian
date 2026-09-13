@@ -351,11 +351,11 @@
   "worldRules": {
     "death": {
       "title": "死亡与世界回退",
-      "summary": "单个玩家死亡后，会在这个仍在运行的世界中重新出世并继续修行；只有房间内所有玩家同时覆灭，世界才回退到最近的时间锚点。",
+      "summary": "单个玩家死亡后化为残魂，等待同伴复活并继续参与世界；只有房间内所有玩家全部死亡，天地才回到起点并进入下一周目。",
       "worldContinuesOnPlayerDeath": true,
-      "playerReincarnatesInSameWorld": true,
+      "playerReincarnatesInSameWorld": false,
       "rewindWhenAllPlayersDead": true,
-      "rewindTarget": "最近时间锚点"
+      "rewindTarget": "世界起点"
     },
     "multiplayerTitle": "多人内容",
     "raids": [

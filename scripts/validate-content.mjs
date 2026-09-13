@@ -150,6 +150,39 @@ function validatePrologue(config) {
   if (totalWeight <= 0) fail(`${location}#character.origins`, "出身 Roll 总权重必须大于 0");
 }
 
+function validateReincarnation(config) {
+  const location = "public/游戏内容/轮回规则.json";
+  if (!config?.death || !Array.isArray(config?.soul?.actions) || !Array.isArray(config?.revival?.methods)) {
+    fail(location, "缺少 death、soul.actions 或 revival.methods");
+    return;
+  }
+  if (!Number.isInteger(config.death.deadlineDays) || config.death.deadlineDays < 1) {
+    fail(`${location}#death.deadlineDays`, "复活期限必须是正整数");
+  }
+  for (const key of ["reviveHealthPercent", "reviveSpiritPercent", "minimumSpiritFloorPercent", "maximumDrainPercent"]) {
+    if (!Number.isFinite(config.death[key]) || config.death[key] < 0 || config.death[key] > 100) {
+      fail(`${location}#death.${key}`, "百分比必须在 0—100 之间");
+    }
+  }
+  const actionIds = new Set();
+  for (const action of config.soul.actions) {
+    if (!action.id || actionIds.has(action.id)) fail(`${location}#soul.actions`, `行动 id 缺失或重复：${action.id ?? "空"}`);
+    actionIds.add(action.id);
+    if (!["none", "living"].includes(action.target)) fail(`${location}#soul.actions.${action.id}.target`, "目标只能是 none 或 living");
+    if (!Number.isInteger(action.powerGain) || action.powerGain < 0 || action.powerGain > 2) fail(`${location}#soul.actions.${action.id}.powerGain`, "单次魂力收益必须是 0—2 的整数");
+  }
+  const methodIds = new Set();
+  for (const method of config.revival.methods) {
+    if (!method.id || methodIds.has(method.id)) fail(`${location}#revival.methods`, `复活方式 id 缺失或重复：${method.id ?? "空"}`);
+    methodIds.add(method.id);
+  }
+  if (!config.revival.methods.some((method) => method.selfOnly)) fail(`${location}#revival.methods`, "至少需要一种残魂自行复活方式");
+  if (!Array.isArray(config.revival.fateMarks) || config.revival.fateMarks.length === 0) fail(`${location}#revival.fateMarks`, "至少需要一条死亡命格");
+  if (!config.cycleSecret?.requiredArtId || !config.inheritance?.legacyArts?.some((art) => art.id === config.cycleSecret.requiredArtId)) {
+    fail(`${location}#cycleSecret.requiredArtId`, "二周目特殊剧情引用的功法必须存在于 legacyArts");
+  }
+}
+
 function validateFreeActionObjects(content, freeConfig) {
   const location = "public/游戏内容/自由行动/内容对象示例.json";
   if (!content || !freeConfig?.actions) return;
@@ -204,6 +237,7 @@ validateFreeActionObjects(
 );
 validateEventLibrary(parsed.get(path.normalize(path.join(contentRoot, "随机事件", "01-新手村.json"))));
 validatePrologue(parsed.get(path.normalize(path.join(contentRoot, "序章规则.json"))));
+validateReincarnation(parsed.get(path.normalize(path.join(contentRoot, "轮回规则.json"))));
 
 if (errors.length > 0) {
   console.error(`内容检查失败，共 ${errors.length} 项：`);

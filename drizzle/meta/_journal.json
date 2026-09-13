@@ -15,6 +15,13 @@
       "when": 1789241524670,
       "tag": "0001_common_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789262589255,
+      "tag": "0002_jittery_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

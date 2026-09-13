@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Archive, Copy, Dices, Globe2, Heart, LogOut, RotateCcw, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import { Archive, Copy, Dices, Ghost, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventScene } from "@/components/event-scene";
 import { BirthFlow } from "@/components/birth-flow";
+import { CycleSecretScene, InheritanceScene, SoulScene } from "@/components/reincarnation-scenes";
 import {
   continueVillageAdventure,
   isEventEngineConfig,
@@ -46,16 +47,42 @@ import {
   toggleTrialItem,
   triggerSideQuest,
 } from "@/lib/prologue";
+import {
+  applyPendingSpiritLoss,
+  completeCycleSecret,
+  enterSoulState,
+  isReincarnationConfig,
+  isSoulExpired,
+  recordSoulAction,
+  resolveCycleSecret,
+  reviveLife,
+  shouldShowCycleSecret,
+  type LifeInheritance,
+  type ReincarnationConfig,
+  type RevivalMethodConfig,
+  type SoulActionConfig,
+} from "@/lib/reincarnation";
 import defaultContent from "@/public/游戏内容/界面文字.json";
 import defaultPrologueConfig from "@/public/游戏内容/序章规则.json";
 import defaultEventConfig from "@/public/游戏内容/随机事件/01-新手村.json";
 import defaultEventEngineConfig from "@/public/游戏内容/随机事件/阶段列表.json";
+import defaultReincarnationConfig from "@/public/游戏内容/轮回规则.json";
 
 type Player = {
   id: string;
   name: string;
   isHost: boolean;
   joinedAt: string;
+  lifeStatus: "alive" | "soul" | "rebirth";
+  deathDay: number | null;
+  reviveDeadlineDay: number | null;
+  soulPower: number;
+  lastSoulActionDay: number | null;
+  pendingSpiritLoss: number;
+  realm: string | null;
+  level: number;
+  currentSpirit: number;
+  maxSpirit: number;
 };
 
 type Room = {
@@ -63,6 +90,7 @@ type Room = {
   pvpEnabled: boolean;
   createdAt: string;
   worldDay: number;
+  cycle: number;
   players: Player[];
 };
 
@@ -143,6 +171,7 @@ export default function Home() {
   const [prologueConfig, setPrologueConfig] = useState<PrologueConfig>(defaultPrologueConfig as PrologueConfig);
   const [eventConfig, setEventConfig] = useState<EventLibraryConfig>(defaultEventConfig as unknown as EventLibraryConfig);
   const [eventEngineConfig, setEventEngineConfig] = useState<EventEngineConfig>(defaultEventEngineConfig as unknown as EventEngineConfig);
+  const [reincarnationConfig, setReincarnationConfig] = useState<ReincarnationConfig>(defaultReincarnationConfig as ReincarnationConfig);
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [pvpEnabled, setPvpEnabled] = useState(false);
@@ -154,6 +183,7 @@ export default function Home() {
   const [life, setLife] = useState<PrologueLife | null>(null);
   const [pastLives, setPastLives] = useState<PastLifeArchiveEntry[]>([]);
   const [itemNotice, setItemNotice] = useState("");
+  const [lifeActionBusy, setLifeActionBusy] = useState(false);
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
   const activeBirthStep = life ? currentBirthStep(life) : null;
   const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
@@ -170,6 +200,18 @@ export default function Home() {
         document.title = nextContent.meta.title;
         const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
         if (description) description.content = nextContent.meta.description;
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void fetch(`/游戏内容/轮回规则.json?v=${Date.now()}`, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("轮回规则读取失败");
+        return response.json();
+      })
+      .then((value: unknown) => {
+        if (isReincarnationConfig(value)) setReincarnationConfig(value);
       })
       .catch(() => undefined);
   }, []);
@@ -432,6 +474,99 @@ export default function Home() {
     setLife(next);
   }, [session]);
 
+  const performRoomAction = useCallback(async (body: Record<string, unknown>) => {
+    if (!session) throw new Error("尚未进入世界。");
+    const response = await fetch(`/api/rooms/${session.code}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...body, playerId: session.playerId }),
+    });
+    const data = await readJson(response) as unknown as { room: Room; soulPower?: number; drained?: number };
+    if (data.room) setRoom(data.room);
+    return data;
+  }, [session]);
+
+  const archiveCurrentLife = useCallback((current: PrologueLife) => {
+    if (!session) return false;
+    const entry: PastLifeArchiveEntry = {
+      id: `${session.playerId}-cycle-${current.cycle ?? 1}`,
+      archivedAt: new Date().toISOString(),
+      playerName: session.name,
+      roomCode: session.code,
+      life: current,
+    };
+    try {
+      const stored = localStorage.getItem(`${PAST_LIVES_KEY}:${session.playerId}`);
+      const previous = stored ? JSON.parse(stored) as PastLifeArchiveEntry[] : [];
+      if (previous.some((candidate) => candidate.id === entry.id)) {
+        localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+        setPastLives(previous);
+        setLife(null);
+        return true;
+      }
+      const next = [...previous, entry];
+      localStorage.setItem(`${PAST_LIVES_KEY}:${session.playerId}`, JSON.stringify(next));
+      localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
+      setPastLives(next);
+      setLife(null);
+      return true;
+    } catch {
+      setItemNotice("本机存储空间不足，这一世尚未保存。");
+      return false;
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !life || life.deathState) return;
+    const timer = window.setTimeout(() => {
+      void performRoomAction({
+        action: "sync",
+        realm: life.realm,
+        level: life.level,
+        currentSpirit: life.currentSpirit,
+        maxSpirit: life.maxSpirit,
+      }).catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [life, performRoomAction, session]);
+
+  useEffect(() => {
+    if (!session || !room || !life) return;
+    const timer = window.setTimeout(() => {
+      const player = room.players.find((candidate) => candidate.id === session.playerId);
+      if (!player) return;
+      if (player.lifeStatus === "soul" && !life.deathState) {
+        const restoredSoul = enterSoulState(life, player.deathDay ?? room.worldDay, reincarnationConfig);
+        persistLife({
+          ...restoredSoul,
+          deathState: restoredSoul.deathState ? {
+            ...restoredSoul.deathState,
+            deadlineDay: player.reviveDeadlineDay ?? restoredSoul.deathState.deadlineDay,
+            soulPower: player.soulPower,
+            lastActionDay: player.lastSoulActionDay ?? undefined,
+          } : undefined,
+        });
+        return;
+      }
+      if (player.lifeStatus === "rebirth" && (life.cycle ?? 1) < room.cycle) {
+        archiveCurrentLife(life);
+        return;
+      }
+      if (player.lifeStatus === "alive" && life.deathState) {
+        persistLife(reviveLife(life, reincarnationConfig));
+        setItemNotice("招魂成功。你已回到死亡前的境界，并获得一条死亡命格。");
+        return;
+      }
+      if (player.pendingSpiritLoss > 0 && !life.deathState) {
+        persistLife(applyPendingSpiritLoss(life, player.pendingSpiritLoss));
+        setItemNotice(`残魂牵走了 ${player.pendingSpiritLoss} 点灵力。`);
+        setRoom({ ...room, players: room.players.map((candidate) => candidate.id === player.id ? { ...candidate, pendingSpiritLoss: 0 } : candidate) });
+        void performRoomAction({ action: "ack_effects" }).catch(() => undefined);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [archiveCurrentLife, life, performRoomAction, persistLife, reincarnationConfig, room, session]);
+
   useEffect(() => {
     if (!life?.battle || life.battle.outcome === "defeat" || life.adventure) return;
     const timer = window.setTimeout(() => {
@@ -440,8 +575,10 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [eventConfig, eventEngineConfig, life, persistLife]);
 
-  function beginLife() {
-    persistLife(rollBirth(prologueConfig));
+  function beginLife(inheritance?: LifeInheritance) {
+    const cycle = room?.cycle ?? 1;
+    persistLife(rollBirth(prologueConfig, inheritance, cycle));
+    void performRoomAction({ action: "begin_life" }).catch(() => undefined);
   }
 
   function beginSideQuest() {
@@ -521,29 +658,118 @@ export default function Home() {
     persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
-  function reincarnateLife() {
-    if (!session || !life) return;
-    const archivedAt = new Date().toISOString();
-    const entry: PastLifeArchiveEntry = {
-      id: typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      archivedAt,
-      playerName: session.name,
-      roomCode: session.code,
-      life,
-    };
-    const nextPastLives = [...pastLives, entry];
+  async function testPlayerDeath() {
+    if (!life || !room || life.deathState || lifeActionBusy) return;
+    const deadLife = enterSoulState(life, room.worldDay, reincarnationConfig);
+    persistLife(deadLife);
+    setLifeActionBusy(true);
     try {
-      localStorage.setItem(`${PAST_LIVES_KEY}:${session.playerId}`, JSON.stringify(nextPastLives));
-    } catch {
-      setItemNotice("本机存储空间不足，这一世尚未保存，请先不要转生。");
-      return;
+      await performRoomAction({ action: "die", deadlineDays: reincarnationConfig.death.deadlineDays });
+      setItemNotice("");
+    } catch (caught) {
+      persistLife(life);
+      setItemNotice(caught instanceof Error ? caught.message : "归魂失败。");
+    } finally {
+      setLifeActionBusy(false);
     }
-    localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
-    setPastLives(nextPastLives);
-    setItemNotice("");
-    setLife(null);
+  }
+
+  async function performSoulAction(action: SoulActionConfig, targetId?: string) {
+    if (!life?.deathState || !room || lifeActionBusy) return;
+    const expired = isSoulExpired(life.deathState, room.worldDay);
+    const target = room.players.find((player) => player.id === targetId);
+    setLifeActionBusy(true);
+    try {
+      const result = await performRoomAction({
+        action: "soul_action",
+        actionId: action.id,
+        targetId,
+        powerGain: action.powerGain,
+        spiritDrain: (action.baseSpiritDrain ?? 0) + (expired ? action.expiredSpiritDrainBonus ?? 0 : 0),
+        floorPercent: reincarnationConfig.death.minimumSpiritFloorPercent,
+        maximumPercent: reincarnationConfig.death.maximumDrainPercent,
+      });
+      persistLife(recordSoulAction(life, action, room.worldDay, result.soulPower ?? life.deathState.soulPower + action.powerGain, target?.name));
+      setItemNotice(action.id === "siphon"
+        ? result.drained
+          ? `从「${target?.name ?? "生者"}」处牵引了 ${result.drained} 点灵力。`
+          : "对方的灵力已接近安全线，本次没有吸取到灵力。"
+        : action.resultText);
+    } catch (caught) {
+      setItemNotice(caught instanceof Error ? caught.message : "残魂行动失败。");
+    } finally {
+      setLifeActionBusy(false);
+    }
+  }
+
+  function canPayRevival(method: RevivalMethodConfig) {
+    if (!life) return false;
+    const cost = method.actorCost;
+    if (!cost) return true;
+    if ((cost.spiritStones ?? 0) > (life.spiritStones ?? 0)) return false;
+    if ((cost.spirit ?? 0) > life.currentSpirit) return false;
+    if (cost.itemId) {
+      const item = life.inventory?.find((candidate) => candidate.id === cost.itemId);
+      if (!item || item.quantity < (cost.itemQuantity ?? 1)) return false;
+    }
+    return true;
+  }
+
+  async function revivePlayer(targetId: string, method: RevivalMethodConfig) {
+    if (!life || !room || lifeActionBusy || !canPayRevival(method)) return;
+    const target = room.players.find((player) => player.id === targetId);
+    const expired = Boolean(target?.reviveDeadlineDay && room.worldDay > target.reviveDeadlineDay);
+    const soulPowerCost = expired ? method.expiredSoulPowerCost ?? method.soulPowerCost : method.soulPowerCost;
+    setLifeActionBusy(true);
+    try {
+      await performRoomAction({
+        action: "revive",
+        targetId,
+        selfOnly: method.selfOnly === true,
+        soulPowerCost,
+      });
+      if (!method.selfOnly) {
+        const cost = method.actorCost ?? {};
+        persistLife({
+          ...life,
+          spiritStones: Math.max(0, (life.spiritStones ?? 0) - (cost.spiritStones ?? 0)),
+          currentSpirit: Math.max(0, life.currentSpirit - (cost.spirit ?? 0)),
+          inventory: (life.inventory ?? []).map((item) => item.id === cost.itemId
+            ? { ...item, quantity: Math.max(0, item.quantity - (cost.itemQuantity ?? 1)) }
+            : item),
+        });
+      }
+      setItemNotice(method.selfOnly ? "魂魄重新归位，正在恢复此身。" : `已经以「${method.title}」复活了${target ? `「${target.name}」` : "同伴"}。`);
+    } catch (caught) {
+      setItemNotice(caught instanceof Error ? caught.message : "招魂失败。");
+    } finally {
+      setLifeActionBusy(false);
+    }
+  }
+
+  function beginInheritedLife(selection: { artId?: string; itemId?: string; memoryId?: string }) {
+    const archivedLives = pastLives.map((entry) => entry.life);
+    const inheritedArts = archivedLives.flatMap((entry) => entry.cultivationArts ?? []);
+    const legacyArts = reincarnationConfig.inheritance.legacyArts.filter((art) => (
+      !art.unlock?.stageComplete || archivedLives.some((entry) => entry.adventure?.stageComplete)
+    ));
+    const items = archivedLives.flatMap((entry) => (entry.inventory ?? []).filter((item) => item.quantity > 0));
+    const inheritance: LifeInheritance = {
+      cultivationArt: [...inheritedArts, ...legacyArts].find((entry) => entry.id === selection.artId),
+      item: items.find((entry) => entry.id === selection.itemId),
+      memory: reincarnationConfig.inheritance.memories.find((entry) => entry.id === selection.memoryId),
+    };
+    beginLife(inheritance);
+  }
+
+  function chooseCycleSecret(choiceId: string) {
+    if (!life) return;
+    persistLife(resolveCycleSecret(life, choiceId, reincarnationConfig));
+  }
+
+  function finishCycleSecret() {
+    if (!life) return;
+    persistLife(completeCycleSecret(life));
   }
 
   function resetAllLives() {
@@ -568,7 +794,32 @@ export default function Home() {
     window.history.replaceState(null, "", window.location.pathname);
   }
 
+  useEffect(() => {
+    if (!life || !room || life.currentHealth > 0 || life.deathState || lifeActionBusy) return;
+    const timer = window.setTimeout(() => {
+      const deadLife = enterSoulState(life, room.worldDay, reincarnationConfig);
+      persistLife(deadLife);
+      setLifeActionBusy(true);
+      void performRoomAction({ action: "die", deadlineDays: reincarnationConfig.death.deadlineDays })
+        .catch((caught) => setItemNotice(caught instanceof Error ? caught.message : "归魂失败。"))
+        .finally(() => setLifeActionBusy(false));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [life, lifeActionBusy, performRoomAction, persistLife, reincarnationConfig, room]);
+
   if (session && room) {
+    const ownPlayer = room.players.find((player) => player.id === session.playerId);
+    const archivedLives = pastLives.map((entry) => entry.life);
+    const inheritanceArts = [
+      ...archivedLives.flatMap((entry) => entry.cultivationArts ?? []),
+      ...reincarnationConfig.inheritance.legacyArts.filter((art) => (
+        !art.unlock?.stageComplete || archivedLives.some((entry) => entry.adventure?.stageComplete)
+      )),
+    ].filter((art, index, values) => values.findIndex((candidate) => candidate.id === art.id) === index);
+    const inheritanceItems = archivedLives
+      .flatMap((entry) => (entry.inventory ?? []).filter((item) => item.quantity > 0))
+      .filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
+    const awaitingInheritance = !life && room.cycle > 1 && pastLives.length > 0;
     return (
       <main className="world-grid min-h-screen px-4 py-5 sm:px-7 lg:px-10">
         <div className="mx-auto max-w-6xl">
@@ -616,42 +867,46 @@ export default function Home() {
                 <div>
                   <p className="text-sm tracking-[0.2em] text-[#7ea28f]">{content.world.location}</p>
                   <h1 className="mt-2 text-2xl text-[#f4e8c5] sm:text-3xl">
-                    {life?.adventure
-                      ? `${life.adventure.stageName} · 第 ${pastLives.length + 1} 世`
+                    {life?.deathState
+                      ? `残魂未散 · 第 ${room.cycle} 世`
+                      : life?.adventure
+                      ? `${life.adventure.stageName} · 第 ${room.cycle} 世`
                       : life
-                        ? `第 ${pastLives.length + 1} 世，从出生开始`
+                        ? `第 ${room.cycle} 世，从出生开始`
                         : "命数未定，静候降生"}
                   </h1>
                 </div>
                 {life ? (
                   <div className="flex flex-wrap justify-end gap-2">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="border-[#4e674f] bg-transparent text-[#a7bfa9] hover:bg-[#17352c] hover:text-white">
-                          <Archive className="h-4 w-4" />
-                          {content.world.reincarnateButton}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="border-[#4a5f51] bg-[#0b1713] text-[#e5e9e3]">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-[#f0dfae]">{content.world.reincarnateConfirmTitle}</AlertDialogTitle>
-                          <AlertDialogDescription className="leading-6 text-[#9dafA5]">
-                            {content.world.reincarnateConfirmText}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="border-[#3b5147] bg-transparent text-[#aebdb5] hover:bg-[#14241f] hover:text-white">
-                            {content.world.cancelButton}
-                          </AlertDialogCancel>
-                          <AlertDialogAction onClick={reincarnateLife} className="bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
-                            <RotateCcw className="h-4 w-4" />
-                            {content.world.reincarnateConfirmButton}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    {!life.deathState && statAllocationReady && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button title={reincarnationConfig.death.testDeathHint} variant="outline" size="sm" className="border-[#66516f] bg-transparent text-[#b8a4c1] hover:bg-[#211629] hover:text-white">
+                            <Ghost className="h-4 w-4" />
+                            {reincarnationConfig.death.testDeathButton}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="border-[#5e4a68] bg-[#120d17] text-[#e8e0eb]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-[#eadcf0]">{reincarnationConfig.death.confirmTitle}</AlertDialogTitle>
+                            <AlertDialogDescription className="leading-6 text-[#aa9caf]">
+                              {reincarnationConfig.death.confirmText}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="border-[#52435a] bg-transparent text-[#c1b3c6] hover:bg-[#211629] hover:text-white">
+                              {content.world.cancelButton}
+                            </AlertDialogCancel>
+                            <AlertDialogAction onClick={testPlayerDeath} className="bg-[#745783] text-white hover:bg-[#866395]">
+                              <Ghost className="h-4 w-4" />
+                              {reincarnationConfig.death.confirmButton}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
 
-                    <AlertDialog>
+                    {!life.deathState && <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="sm" className="text-[#b17e75] hover:bg-[#321d19] hover:text-[#f1b2a5]">
                           <Trash2 className="h-4 w-4" />
@@ -674,15 +929,30 @@ export default function Home() {
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
-                    </AlertDialog>
+                    </AlertDialog>}
                   </div>
                 ) : (
                   <Sparkles className="slow-pulse h-6 w-6 text-[#d6b66d]" />
                 )}
               </div>
               <div className="gold-rule my-6 h-px" />
+              {itemNotice && (
+                <p className="mb-5 rounded border border-[#5e4d31] bg-[#201b10] px-3 py-2 text-sm leading-6 text-[#ddc486]">
+                  {itemNotice}
+                </p>
+              )}
 
               {!life ? (
+                awaitingInheritance ? (
+                  <InheritanceScene
+                    cycle={room.cycle}
+                    config={reincarnationConfig}
+                    arts={inheritanceArts}
+                    items={inheritanceItems}
+                    memories={reincarnationConfig.inheritance.memories}
+                    onBegin={beginInheritedLife}
+                  />
+                ) : (
                 <div className="space-y-6">
                   <p className="max-w-2xl text-base leading-8 text-[#b8c5bd]">
                     {prologueConfig.intro.description}
@@ -712,11 +982,33 @@ export default function Home() {
                       </div>
                     </details>
                   )}
-                  <Button onClick={beginLife} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
+                  <Button onClick={() => beginLife()} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
                     <Dices className="h-4 w-4" />
                     {prologueConfig.intro.rollButton}
                   </Button>
                 </div>
+                )
+              ) : life.deathState ? (
+                <SoulScene
+                  life={life}
+                  worldDay={room.worldDay}
+                  players={room.players}
+                  currentPlayerId={session.playerId}
+                  config={reincarnationConfig}
+                  busy={lifeActionBusy}
+                  onAct={performSoulAction}
+                  onSelfRevive={() => {
+                    const method = reincarnationConfig.revival.methods.find((candidate) => candidate.selfOnly);
+                    if (method) void revivePlayer(session.playerId, method);
+                  }}
+                />
+              ) : statAllocationReady && shouldShowCycleSecret(life, reincarnationConfig) ? (
+                <CycleSecretScene
+                  life={life}
+                  config={reincarnationConfig}
+                  onChoose={chooseCycleSecret}
+                  onContinue={finishCycleSecret}
+                />
               ) : life.adventure ? (
                 <EventScene
                   life={life}
@@ -872,6 +1164,20 @@ export default function Home() {
                         {prologueConfig.character.allocationCompleteText}
                       </p>
                     )}
+                    {(life.deathMarks?.length ?? 0) > 0 && (
+                      <div className="mt-3 rounded border border-[#54405f] bg-[#160f1c] px-3 py-2">
+                        <p className="text-xs text-[#9b86a7]">死亡命格</p>
+                        {life.deathMarks?.map((mark) => (
+                          <p key={mark.id} className="mt-1 text-sm text-[#d6c0df]" title={mark.description}>「{mark.name}」</p>
+                        ))}
+                      </div>
+                    )}
+                    {life.inheritedMemory && (
+                      <div className="mt-3 rounded border border-[#4a5036] bg-[#11170f] px-3 py-2">
+                        <p className="text-xs text-[#82968c]">前世记忆</p>
+                        <p className="mt-1 text-sm text-[#e0ce91]" title={life.inheritedMemory.description}>「{life.inheritedMemory.name}」</p>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="mt-4 text-sm leading-6 text-[#71847a]">
@@ -880,7 +1186,7 @@ export default function Home() {
                 )}
               </section>
 
-              {life && statAllocationReady && (
+              {life && statAllocationReady && !life.deathState && (
                 <section className="ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg text-[#f0dfae]">{prologueConfig.character.assetsTitle}</h2>
@@ -938,7 +1244,6 @@ export default function Home() {
                               ? "可为当前事件备好任意数量的道具；结算时仅消耗真正生效的消耗品。"
                               : prologueConfig.character.itemUseHint}
                           </p>
-                          {itemNotice && <p className="rounded border border-[#5e4d31] bg-[#201b10] px-3 py-2 text-sm text-[#ddc486]">{itemNotice}</p>}
                         </div>
                       ) : (
                         <p className="text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
@@ -973,7 +1278,7 @@ export default function Home() {
                 </section>
               )}
 
-              {life && statAllocationReady && (
+              {life && statAllocationReady && !life.deathState && (
                 <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
@@ -1074,12 +1379,52 @@ export default function Home() {
                 </div>
                 <div className="mt-4 space-y-2">
                   {room.players.map((player) => (
-                    <div key={player.id} className="flex items-center gap-3 rounded-md border border-[#284138] bg-[#091511] px-3 py-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-[#e7ebe4]">{player.name}</p>
-                        <p className="text-xs text-[#74877e]">{player.isHost ? content.world.hostRole : content.world.playerRole}</p>
+                    <div key={player.id} className={`rounded-md border px-3 py-2 ${player.lifeStatus === "soul" ? "border-[#594565] bg-[#150f1b]" : "border-[#284138] bg-[#091511]"}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-[#e7ebe4]">{player.name}</p>
+                          <p className="text-xs text-[#74877e]">
+                            {player.lifeStatus === "soul"
+                              ? `残魂 · 魂力 ${player.soulPower}`
+                              : player.lifeStatus === "rebirth"
+                                ? "等待轮回"
+                                : `${player.realm ?? (player.isHost ? content.world.hostRole : content.world.playerRole)} · ${player.level}级`}
+                          </p>
+                        </div>
+                        {player.lifeStatus === "soul" && <Ghost className="h-4 w-4 text-[#a987ba]" />}
+                        {player.id === session.playerId && <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>}
                       </div>
-                      {player.id === session.playerId && <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>}
+                      {player.lifeStatus === "soul" && ownPlayer?.lifeStatus === "alive" && player.id !== session.playerId && life && !life.deathState && (
+                        <details className="mt-2 border-t border-[#493852] pt-2">
+                          <summary className="cursor-pointer text-xs text-[#c2a8cf]">{reincarnationConfig.revival.title}</summary>
+                          <p className="mt-2 text-xs leading-5 text-[#7f7485]">{reincarnationConfig.revival.summary}</p>
+                          <div className="mt-2 grid gap-2">
+                            {reincarnationConfig.revival.methods.filter((method) => !method.selfOnly).map((method) => {
+                              const cost = method.actorCost ?? {};
+                              const costText = cost.spiritStones
+                                ? `${cost.spiritStones} 灵石`
+                                : cost.spirit
+                                  ? `${cost.spirit} 灵力`
+                                  : cost.itemId
+                                    ? `道具 ×${cost.itemQuantity ?? 1}`
+                                    : "无消耗";
+                              return (
+                                <Button
+                                  key={method.id}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={lifeActionBusy || !canPayRevival(method)}
+                                  onClick={() => void revivePlayer(player.id, method)}
+                                  className="justify-between border-[#594565] bg-transparent text-[#ccb8d5] hover:bg-[#24182b] hover:text-white"
+                                  title={method.description}
+                                >
+                                  <span>{method.title}</span><span className="text-[11px] opacity-70">{costText}</span>
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1091,8 +1436,8 @@ export default function Home() {
                 {life && statAllocationReady && (
                   <>
                     <div className="mt-5 border-t border-[#29443a] pt-4">
-                      <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.death.title}</p>
-                      <p className="mt-2 text-xs leading-5 text-[#7f9288]">{prologueConfig.worldRules.death.summary}</p>
+                      <p className="text-sm text-[#d9c98f]">{reincarnationConfig.death.title}</p>
+                      <p className="mt-2 text-xs leading-5 text-[#7f9288]">{reincarnationConfig.death.summary}</p>
                     </div>
                     <div className="mt-4">
                       <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.multiplayerTitle}</p>

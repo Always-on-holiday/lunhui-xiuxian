@@ -1,0 +1,43 @@
+轮回系统内容修改说明
+====================
+
+主要文件：轮回规则.json
+
+1. death
+控制残魂期限、复活后的气血/灵力比例、吸灵安全线与测试死亡按钮文字。
+当前 1 个世界日约等于现实 1 分钟，deadlineDays: 8 表示约 8 分钟的普通复活期限。
+期限结束不会出局，而会进入“执念残魂”。
+
+2. soul.actions
+每个对象是一种残魂行动：
+- id 必须唯一。
+- target 为 none 时不选择玩家，为 living 时需要指定生者。
+- powerGain 每次最多 2，避免过快自行复活。
+- siphon 可以填写 baseSpiritDrain 和 expiredSpiritDrainBonus。
+残魂每天只能行动一次，吸灵不会把目标压到 minimumSpiritFloorPercent 以下。
+
+3. revival.methods
+添加复活路线时，可以使用：
+- actorCost.spiritStones：施救者灵石消耗。
+- actorCost.spirit：施救者灵力消耗。
+- actorCost.itemId / itemQuantity：施救者道具消耗。
+- selfOnly：仅残魂自己使用。
+- soulPowerCost / expiredSoulPowerCost：普通期和执念期的魂力要求。
+
+4. revival.fateMarks
+复活后随机获得一条死亡命格。这里只需要继续追加 id、name 和 description。
+
+5. inheritance
+全员死亡后，世界周目加一。每名玩家都能从本机轮回册中各选至多一部功法、一件物品和一段记忆。
+legacyArts 是达成条件后可直接进入继承池的周目功法。目前完成一次新手村即可解锁“搜魂术·残篇”。
+memories 用来添加可继承记忆；事件系统现已支持 memory、cycle、cultivationArt 和 item 四种前世条件。
+
+6. cycleSecret
+控制二周目守门人的特殊剧情。
+requiredCycle 是最低周目，requiredArtId 是所需功法。
+choices 可继续追加选项；requiresArtId 控制功法条件，setFlag 会在正式进入随机事件阶段时写入世界事件标记。
+
+7. 联机同步
+玩家的生者、残魂、等待轮回状态以及魂力、复活期限和待扣灵力保存在世界存档数据库中。
+角色详细数值、功法、物品、记忆和前世履历继续保存在每名玩家自己的浏览器本地。
+

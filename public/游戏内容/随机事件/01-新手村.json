@@ -158,6 +158,14 @@
       "effects": [
         { "contextId": "stage_02_entry", "specialResult": "解锁第二阶段隐藏入口", "message": "石片指向了官道之外的一条旧路。" }
       ]
+    },
+    "soul_wood": {
+      "id": "soul_wood",
+      "name": "养魂木",
+      "category": "招魂材料",
+      "description": "阴气凝成的乌木，可以替一名残魂稳定魂魄并引回肉身。",
+      "consumable": true,
+      "effects": []
     }
   },
   "randomEvents": [
@@ -380,7 +388,7 @@
             "criticalFailure": { "text": "哭声骤然贴到耳边。你昏倒在路旁，醒来时已过了一夜。", "effects": [{ "type": "health", "operation": "add", "value": -9 }, { "type": "spirit", "operation": "add", "value": -5 }] },
             "failure": { "text": "阴风熄灭油灯，你勉强退回村口。", "effects": [{ "type": "health", "operation": "add", "value": -5 }] },
             "success": { "text": "你顶住阴风，在草丛里找到一只走失的纸人。哭声随之消散。", "effects": [{ "type": "spiritStones", "operation": "add", "value": 3 }, { "type": "flag", "operation": "set", "id": "returned_paper_child", "value": true }] },
-            "criticalSuccess": { "text": "铜铃般的哭声碎开，一缕阴气反被你炼成了护体的清凉气息。", "effects": [{ "type": "stat", "operation": "add", "stat": "defense", "value": 1 }, { "type": "spirit", "operation": "add", "value": 3 }] }
+            "criticalSuccess": { "text": "铜铃般的哭声碎开，一缕阴气反被你炼成了护体的清凉气息。草间还留下了一块养魂木。", "effects": [{ "type": "stat", "operation": "add", "stat": "defense", "value": 1 }, { "type": "spirit", "operation": "add", "value": 3 }, { "type": "item", "operation": "add", "id": "soul_wood", "quantity": 1 }] }
           }
         },
         {
