@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Archive, Copy, Dices, Ghost, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import { Archive, ChevronDown, Copy, Dices, Ghost, Globe2, Heart, LogOut, MousePointer2, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +41,7 @@ import {
   type FiveStats,
   isPrologueConfig,
   itemWorksInContext,
+  type InventoryItem,
   type PrologueConfig,
   type PrologueLife,
   resolveWoodenTrial,
@@ -48,6 +49,16 @@ import {
   toggleTrialItem,
   triggerSideQuest,
 } from "@/lib/prologue";
+import {
+  freeActionActorFromLife,
+  isFreeActionConfig,
+  prepareFreeAction,
+  previewFreeAction,
+  resolveFreeAction,
+  type FreeActionConfig,
+  type FreeActionContext,
+  type FreeActionTarget,
+} from "@/lib/free-actions";
 import {
   isLifeExpired,
   normalizeLifeTimeline,
@@ -75,6 +86,7 @@ import defaultPrologueConfig from "@/public/游戏内容/序章规则.json";
 import defaultEventConfig from "@/public/游戏内容/随机事件/01-新手村.json";
 import defaultEventEngineConfig from "@/public/游戏内容/随机事件/阶段列表.json";
 import defaultReincarnationConfig from "@/public/游戏内容/轮回规则.json";
+import defaultFreeActionConfig from "@/public/游戏内容/自由行动/自由行动规则.json";
 
 type Player = {
   id: string;
@@ -141,6 +153,39 @@ const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
   { key: "proficiency", label: "熟练" },
 ];
 
+const STAT_NAME = Object.fromEntries(STAT_LABELS.map((entry) => [entry.key, entry.label])) as Record<keyof FiveStats, string>;
+const HOSTILE_ACTIONS = new Set(["threaten", "steal", "rob", "attack", "kill", "infringe"]);
+const ITEM_ACTION_ORDER = ["inspect_item", "use_item", "eat_item", "equip_item", "combine_item", "give_item", "destroy_item", "discard_item"];
+const PLAYER_ACTION_ORDER = ["observe", "talk", "trade", "help", "threaten", "steal", "rob", "attack", "kill", "infringe", "leave"];
+const FREE_ACTION_OUTCOME_LABELS = {
+  criticalSuccess: "大成",
+  success: "成功",
+  failure: "失败",
+  criticalFailure: "惨败",
+} as const;
+
+type ActionSelection = {
+  key: string;
+  target: FreeActionTarget;
+  sourceItemId?: string;
+  sourcePlayerId?: string;
+};
+
+function itemTags(item: InventoryItem) {
+  const text = `${item.name} ${item.category} ${item.description}`;
+  const tags = new Set<string>();
+  if (/食|粮|肉|果|饼|汤/.test(text)) tags.add("food");
+  if (/丹|药|草|灵植/.test(text)) tags.add("herb");
+  if (/毒|腐|瘴/.test(text)) tags.add("toxic");
+  if (/矿|石|铁|玉/.test(text)) tags.add("mineral");
+  if (/剑|刀|枪|弓|武器|兵刃/.test(text)) tags.add("weapon");
+  if (/甲|衣|袍|盾|护具/.test(text)) tags.add("armor");
+  if (/符|印|令/.test(text)) tags.add("talisman");
+  if (/戒|佩|坠|饰/.test(text)) tags.add("accessory");
+  if (/信|钥|任务|凭证/.test(text)) tags.add("quest_key");
+  return [...tags];
+}
+
 type UiContent = typeof defaultContent;
 
 function mergeContent(value: unknown): UiContent {
@@ -180,6 +225,7 @@ export default function Home() {
   const [eventConfig, setEventConfig] = useState<EventLibraryConfig>(defaultEventConfig as unknown as EventLibraryConfig);
   const [eventEngineConfig, setEventEngineConfig] = useState<EventEngineConfig>(defaultEventEngineConfig as unknown as EventEngineConfig);
   const [reincarnationConfig, setReincarnationConfig] = useState<ReincarnationConfig>(defaultReincarnationConfig as ReincarnationConfig);
+  const [freeActionConfig, setFreeActionConfig] = useState<FreeActionConfig>(defaultFreeActionConfig as unknown as FreeActionConfig);
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [pvpEnabled, setPvpEnabled] = useState(false);
@@ -192,6 +238,8 @@ export default function Home() {
   const [pastLives, setPastLives] = useState<PastLifeArchiveEntry[]>([]);
   const [itemNotice, setItemNotice] = useState("");
   const [lifeActionBusy, setLifeActionBusy] = useState(false);
+  const [activeActionTarget, setActiveActionTarget] = useState<string | null>(null);
+  const [freeActionNotice, setFreeActionNotice] = useState<{ targetKey: string; text: string; danger: boolean } | null>(null);
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
   const activeBirthStep = life ? currentBirthStep(life) : null;
   const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
@@ -221,6 +269,18 @@ export default function Home() {
       })
       .then((value: unknown) => {
         if (isReincarnationConfig(value)) setReincarnationConfig(value);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void fetch(`/游戏内容/自由行动/自由行动规则.json?v=${Date.now()}`, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("自由行动规则读取失败");
+        return response.json();
+      })
+      .then((value: unknown) => {
+        if (isFreeActionConfig(value)) setFreeActionConfig(value);
       })
       .catch(() => undefined);
   }, []);
@@ -711,6 +771,203 @@ export default function Home() {
     if (!life?.adventure) return;
     setItemNotice("");
     persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
+  }
+
+  function itemActionSelection(item: NonNullable<PrologueLife["inventory"]>[number]): ActionSelection {
+    const tags = itemTags(item);
+    return {
+      key: `item:${item.id}`,
+      sourceItemId: item.id,
+      target: {
+        id: `item:${item.id}`,
+        name: item.name,
+        type: "item",
+        level: life?.level ?? 1,
+        baseDifficulty: Math.max(5, (life?.level ?? 1) + (item.consumable ? 2 : 6)),
+        state: "carried",
+        tags,
+        traits: {
+          complexity: tags.some((tag) => ["talisman", "weapon", "armor"].includes(tag)) ? 12 : 5,
+          toxicity: tags.includes("toxic") ? 35 : tags.includes("herb") ? 8 : 0,
+          durability: tags.includes("mineral") ? 35 : 10,
+          concealment: 5,
+        },
+      },
+    };
+  }
+
+  function playerActionSelection(player: Player): ActionSelection {
+    return {
+      key: `player:${player.id}`,
+      sourcePlayerId: player.id,
+      target: {
+        id: `player:${player.id}`,
+        name: player.name,
+        type: "npc",
+        level: Math.max(1, player.level),
+        baseDifficulty: 10,
+        relation: 0,
+        state: player.lifeStatus,
+        tags: ["neutral", "witness", ...(player.isHost ? ["important"] : [])],
+        traits: { concealment: 5, alertness: 10, willpower: 10, bargaining: 5, courage: 10, suspicion: 5 },
+      },
+    };
+  }
+
+  function secondaryTargetFor(actionId: string, selection: ActionSelection): FreeActionTarget | undefined {
+    if (!life || !session || !room) return undefined;
+    if (actionId === "use_item") {
+      return { id: session.playerId, name: session.name, type: "self", level: life.level, stats: life.stats, tags: [], state: "alive" };
+    }
+    if (actionId === "combine_item") {
+      const otherItem = (life.inventory ?? []).find((item) => item.quantity > 0 && item.id !== selection.sourceItemId);
+      return otherItem ? itemActionSelection(otherItem).target : undefined;
+    }
+    if (actionId === "give_item") {
+      const otherPlayer = room.players.find((player) => player.id !== session.playerId && player.lifeStatus === "alive");
+      return otherPlayer ? playerActionSelection(otherPlayer).target : undefined;
+    }
+    return undefined;
+  }
+
+  function freeActionContext(selection: ActionSelection, actionId: string): FreeActionContext | null {
+    if (!life || life.deathState || lifeExpired || !session || !room) return null;
+    const attemptKey = `${selection.key}:${actionId}`;
+    const isHostilePvpAction = Boolean(selection.sourcePlayerId && HOSTILE_ACTIONS.has(actionId));
+    return {
+      actor: freeActionActorFromLife(session.playerId, life),
+      target: selection.target,
+      secondaryTarget: secondaryTargetFor(actionId, selection),
+      world: {
+        seed: `${room.code}:${room.createdAt}`,
+        locationId: "green-stone-village",
+        locationTags: ["settlement"],
+        witnessCount: Math.max(0, room.players.filter((player) => player.lifeStatus === "alive").length - 2),
+      },
+      actionId,
+      attemptCount: life.freeActionAttempts?.[attemptKey] ?? 0,
+      override: isHostilePvpAction && !room.pvpEnabled
+        ? { available: false, unavailableReason: "房主未开启 PVP，不能对其他玩家采取敌对行动。" }
+        : undefined,
+    };
+  }
+
+  function performFreeAction(selection: ActionSelection, actionId: string) {
+    if (!life || life.deathState || lifeExpired || !session) return;
+    const context = freeActionContext(selection, actionId);
+    if (!context) return;
+    const preview = previewFreeAction(context, freeActionConfig);
+    if (!preview.available) {
+      setFreeActionNotice({ targetKey: selection.key, text: preview.reason, danger: true });
+      return;
+    }
+    if ((preview.requiresConfirmation || preview.lethalWarning) && !window.confirm(
+      `${preview.actionName}「${selection.target.name}」？\n风险：${preview.riskLabel}\n预计成功率：${preview.chanceRange[0]}–${preview.chanceRange[1]}%\n此行动可能产生不可逆后果。`,
+    )) return;
+
+    const attemptKey = `${selection.key}:${actionId}`;
+    const attemptNumber = life.freeActionAttempts?.[attemptKey] ?? 0;
+    const resolution = resolveFreeAction(
+      prepareFreeAction(context, `${session.playerId}:${attemptKey}:${attemptNumber}`),
+      freeActionConfig,
+    );
+    const succeeded = resolution.outcome === "success" || resolution.outcome === "criticalSuccess";
+    const consumeItem = Boolean(selection.sourceItemId && (
+      actionId === "discard_item"
+      || (succeeded && actionId === "destroy_item")
+      || (succeeded && actionId === "eat_item")
+      || (succeeded && actionId === "use_item"
+        && life.inventory?.find((item) => item.id === selection.sourceItemId)?.consumable)
+    ));
+    const accumulatedMinutes = (life.freeActionWorldMinutes ?? 0) + resolution.costs.worldMinutes;
+    const elapsedDays = Math.floor(accumulatedMinutes / (24 * 60));
+    let nextLife: PrologueLife = {
+      ...life,
+      currentHealth: Math.max(1, life.currentHealth - resolution.costs.health),
+      currentSpirit: Math.max(0, life.currentSpirit - resolution.costs.spirit),
+      spiritStones: Math.max(0, (life.spiritStones ?? 0) - resolution.costs.spiritStones),
+      inventory: consumeItem
+        ? (life.inventory ?? []).map((item) => item.id === selection.sourceItemId
+          ? { ...item, quantity: Math.max(0, item.quantity - 1) }
+          : item)
+        : life.inventory,
+      freeActionAttempts: {
+        ...(life.freeActionAttempts ?? {}),
+        [attemptKey]: attemptNumber + 1,
+      },
+      freeActionWorldMinutes: accumulatedMinutes % (24 * 60),
+    };
+    if (elapsedDays > 0) {
+      nextLife = spendLifeTime(nextLife, elapsedDays, "自由行动", prologueConfig.timeSystem);
+    }
+    persistLife(nextLife);
+
+    const handoff = resolution.nextSystem === "combat"
+      ? resolution.combat?.lethal ? " 结果需要转入致死战斗。" : " 结果需要转入战斗。"
+      : resolution.nextSystem === "dialogue" ? " 结果需要进入交谈界面。"
+        : resolution.nextSystem === "trade" ? " 结果需要进入交易界面。" : "";
+    const timeText = resolution.costs.worldMinutes > 0 ? ` 耗时 ${resolution.costs.worldMinutes} 分钟。` : "";
+    setFreeActionNotice({
+      targetKey: selection.key,
+      text: `${FREE_ACTION_OUTCOME_LABELS[resolution.outcome]}（掷 ${resolution.roll}/${resolution.chance}）：${resolution.message}${handoff}${timeText}`,
+      danger: resolution.outcome === "failure" || resolution.outcome === "criticalFailure" || resolution.nextSystem === "combat",
+    });
+    if (consumeItem && (nextLife.inventory?.find((item) => item.id === selection.sourceItemId)?.quantity ?? 0) <= 0) {
+      setActiveActionTarget(null);
+    }
+  }
+
+  function renderFreeActionMenu(selection: ActionSelection) {
+    if (!life || life.deathState || lifeExpired || activeActionTarget !== selection.key) return null;
+    const order = selection.target.type === "item" ? ITEM_ACTION_ORDER : PLAYER_ACTION_ORDER;
+    const actions = order.filter((actionId) => freeActionConfig.actions[actionId]?.targets.includes(selection.target.type));
+    const primary = actions.slice(0, freeActionConfig.interface.recommendedActionLimit);
+    const extra = actions.slice(freeActionConfig.interface.recommendedActionLimit);
+    const renderActions = (actionIds: string[]) => (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {actionIds.map((actionId) => {
+          const context = freeActionContext(selection, actionId);
+          if (!context) return null;
+          const preview = previewFreeAction(context, freeActionConfig);
+          return (
+            <button
+              key={actionId}
+              type="button"
+              disabled={!preview.available}
+              title={preview.available ? undefined : preview.reason}
+              onClick={() => performFreeAction(selection, actionId)}
+              className="rounded border border-[#3b584a] bg-[#102019] px-3 py-2 text-left transition hover:border-[#b99a56] hover:bg-[#17352c] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <span className="block text-sm text-[#e6d8ad]">{preview.actionName}</span>
+              <span className="mt-1 block text-xs text-[#7f9288]">
+                {preview.available
+                  ? `${preview.riskLabel} · ${preview.chanceRange[0]}–${preview.chanceRange[1]}%${preview.primaryStat ? ` · ${STAT_NAME[preview.primaryStat]}` : ""}`
+                  : preview.reason}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+    return (
+      <div className="mt-3 border-t border-[#2b4439] pt-3" onClick={(event) => event.stopPropagation()}>
+        <p className="mb-2 flex items-center gap-2 text-xs text-[#aebdb5]"><MousePointer2 className="h-3.5 w-3.5" />选择对「{selection.target.name}」的行为</p>
+        {renderActions(primary)}
+        {extra.length > 0 && (
+          <details className="mt-2">
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-xs text-[#82968c]">
+              <ChevronDown className="h-3.5 w-3.5" />{freeActionConfig.interface.extraActionsLabel}
+            </summary>
+            <div className="mt-2">{renderActions(extra)}</div>
+          </details>
+        )}
+        {freeActionNotice?.targetKey === selection.key && (
+          <p className={`mt-3 rounded border px-3 py-2 text-sm leading-6 ${freeActionNotice.danger ? "border-[#73443b] bg-[#2a1714] text-[#e8a190]" : "border-[#486a58] bg-[#10241c] text-[#b8d8c7]"}`}>
+            {freeActionNotice.text}
+          </p>
+        )}
+      </div>
+    );
   }
 
   async function testPlayerDeath() {
@@ -1269,8 +1526,9 @@ export default function Home() {
                     <TabsContent value="inventory" className="mt-4">
                       {(life.inventory ?? []).some((item) => item.quantity > 0) ? (
                         <div className="space-y-3">
-                          {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
-                            const eventPreparing = Boolean(
+                           {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
+                             const actionSelection = itemActionSelection(item);
+                             const eventPreparing = Boolean(
                               life.adventure?.currentEventId
                                 && !life.adventure.lastResolution
                                 && !life.adventure.stageComplete,
@@ -1281,12 +1539,24 @@ export default function Home() {
                             const mayPrepare = eventPreparing
                               || Boolean(!life.adventure && life.training && (!life.battle || life.battle.outcome === "defeat"));
                             return (
-                              <div key={item.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm text-[#e6d8ad]">{item.name} × {item.quantity}</p>
-                                    <p className="mt-1 text-xs text-[#75887e]">{item.category} · {item.consumable ? "消耗品" : "持有物"}</p>
-                                  </div>
+                               <div key={item.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                                 <div className="flex items-start justify-between gap-3">
+                                   <button
+                                     type="button"
+                                     className="min-w-0 flex-1 text-left"
+                                     aria-expanded={activeActionTarget === actionSelection.key}
+                                     onClick={() => {
+                                       setActiveActionTarget((current) => current === actionSelection.key ? null : actionSelection.key);
+                                       setFreeActionNotice(null);
+                                     }}
+                                   >
+                                     <p className="text-sm text-[#e6d8ad]">{item.name} × {item.quantity}</p>
+                                     <p className="mt-1 text-xs text-[#75887e]">{item.category} · {item.consumable ? "消耗品" : "持有物"}</p>
+                                     <p className="mt-2 text-sm leading-6 text-[#98a69f]">{item.description}</p>
+                                     <span className="mt-2 inline-flex items-center gap-1 text-xs text-[#b69a63]">
+                                       <MousePointer2 className="h-3 w-3" />点击选择行为
+                                     </span>
+                                   </button>
                                   {mayPrepare && (
                                     <Button
                                       size="sm"
@@ -1299,9 +1569,9 @@ export default function Home() {
                                       {selected ? prologueConfig.character.selectedItem : prologueConfig.character.selectItem}
                                     </Button>
                                   )}
-                                </div>
-                                <p className="mt-2 text-sm leading-6 text-[#98a69f]">{item.description}</p>
-                              </div>
+                                 </div>
+                                 {renderFreeActionMenu(actionSelection)}
+                               </div>
                             );
                           })}
                           <p className="text-xs leading-5 text-[#70837a]">
@@ -1443,9 +1713,25 @@ export default function Home() {
                   <span className="text-sm text-[#82968c]">{room.players.length} / 4</span>
                 </div>
                 <div className="mt-4 space-y-2">
-                  {room.players.map((player) => (
+                  {room.players.map((player) => {
+                    const isCurrentPlayer = player.id === session.playerId;
+                    const actionSelection = playerActionSelection(player);
+                    const canUseFreeActions = !isCurrentPlayer
+                      && player.lifeStatus === "alive"
+                      && ownPlayer?.lifeStatus === "alive"
+                      && Boolean(life && statAllocationReady && !life.deathState && !lifeExpired);
+                    return (
                     <div key={player.id} className={`rounded-md border px-3 py-2 ${player.lifeStatus === "soul" ? "border-[#594565] bg-[#150f1b]" : "border-[#284138] bg-[#091511]"}`}>
-                      <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={!canUseFreeActions}
+                        aria-expanded={canUseFreeActions && activeActionTarget === actionSelection.key}
+                        onClick={() => {
+                          setActiveActionTarget((current) => current === actionSelection.key ? null : actionSelection.key);
+                          setFreeActionNotice(null);
+                        }}
+                        className="flex w-full items-center gap-3 text-left disabled:cursor-default"
+                      >
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-[#e7ebe4]">{player.name}</p>
                           <p className="text-xs text-[#74877e]">
@@ -1457,8 +1743,11 @@ export default function Home() {
                           </p>
                         </div>
                         {player.lifeStatus === "soul" && <Ghost className="h-4 w-4 text-[#a987ba]" />}
-                        {player.id === session.playerId && <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>}
-                      </div>
+                        {isCurrentPlayer
+                          ? <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>
+                          : canUseFreeActions && <span className="flex items-center gap-1 text-xs text-[#b69a63]"><MousePointer2 className="h-3 w-3" />行为</span>}
+                      </button>
+                      {canUseFreeActions && renderFreeActionMenu(actionSelection)}
                       {player.lifeStatus === "soul" && ownPlayer?.lifeStatus === "alive" && player.id !== session.playerId && life && !life.deathState && (
                         <details className="mt-2 border-t border-[#493852] pt-2">
                           <summary className="cursor-pointer text-xs text-[#c2a8cf]">{reincarnationConfig.revival.title}</summary>
@@ -1491,7 +1780,8 @@ export default function Home() {
                         </details>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <Button onClick={copyInvite} size="sm" className="mt-4 w-full bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
                   <Copy className="h-4 w-4" />

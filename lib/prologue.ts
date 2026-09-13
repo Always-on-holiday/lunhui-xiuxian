@@ -291,6 +291,8 @@ export type PrologueLife = {
   inheritance?: LifeInheritance;
   cycleSecret?: CycleSecretState;
   timeline?: LifeTimeline;
+  freeActionAttempts?: Record<string, number>;
+  freeActionWorldMinutes?: number;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
