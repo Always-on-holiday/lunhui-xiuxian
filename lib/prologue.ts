@@ -3,6 +3,7 @@ import type { AdventureState } from "@/lib/events";
 export type StatKey = "attack" | "defense" | "speed" | "intelligence" | "proficiency";
 
 export type FiveStats = Record<StatKey, number>;
+export type BirthStep = "origin" | "root" | "allocation" | "ready";
 
 export type RandomRange = {
   min: number;
@@ -181,6 +182,13 @@ export type PrologueConfig = {
     allocationRemainingLabel: string;
     allocationConfirmButton: string;
     allocationCompleteText: string;
+    birthProgressTitle: string;
+    originStepLabel: string;
+    rootStepLabel: string;
+    allocationStepLabel: string;
+    originContinueButton: string;
+    rootContinueButton: string;
+    earlySidebarText: string;
     assetsTitle: string;
     spiritStoneLabel: string;
     inventoryTab: string;
@@ -260,6 +268,7 @@ export type PrologueLife = {
   unspentStatPoints?: number;
   statAllocation?: FiveStats;
   statAllocationFinalized?: boolean;
+  prologueStep?: BirthStep;
   training?: TrainingChoice;
   battle?: BattleReport;
   adventure?: AdventureState;
@@ -483,7 +492,25 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
       proficiency: 0,
     },
     statAllocationFinalized: (config.birth.stats.allocationPoints ?? 5) <= 0,
+    prologueStep: "origin",
   };
+}
+
+export function currentBirthStep(life: PrologueLife): BirthStep {
+  if (life.prologueStep) return life.prologueStep;
+  return life.statAllocationFinalized === false ? "origin" : "ready";
+}
+
+export function advanceBirthStep(life: PrologueLife) {
+  const step = currentBirthStep(life);
+  if (step === "origin") return { ...life, prologueStep: "root" as const };
+  if (step === "root") {
+    return {
+      ...life,
+      prologueStep: life.statAllocationFinalized ? "ready" as const : "allocation" as const,
+    };
+  }
+  return life;
 }
 
 export function adjustBirthStat(
@@ -514,7 +541,7 @@ export function adjustBirthStat(
 
 export function finalizeBirthStats(life: PrologueLife) {
   if ((life.unspentStatPoints ?? 0) > 0) return life;
-  return { ...life, statAllocationFinalized: true };
+  return { ...life, statAllocationFinalized: true, prologueStep: "ready" as const };
 }
 
 export function triggerSideQuest(life: PrologueLife) {

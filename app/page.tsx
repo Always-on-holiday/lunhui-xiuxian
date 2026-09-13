@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Archive, Check, Copy, Dices, Globe2, Heart, LogOut, Minus, Plus, RotateCcw, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import { Archive, Copy, Dices, Globe2, Heart, LogOut, RotateCcw, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventScene } from "@/components/event-scene";
+import { BirthFlow } from "@/components/birth-flow";
 import {
   continueVillageAdventure,
   isEventEngineConfig,
@@ -31,7 +32,9 @@ import {
 import {
   canTriggerSideQuest,
   adjustBirthStat,
+  advanceBirthStep,
   chooseTraining,
+  currentBirthStep,
   finalizeBirthStats,
   type FiveStats,
   isPrologueConfig,
@@ -152,7 +155,8 @@ export default function Home() {
   const [pastLives, setPastLives] = useState<PastLifeArchiveEntry[]>([]);
   const [itemNotice, setItemNotice] = useState("");
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
-  const statAllocationReady = life?.statAllocationFinalized !== false;
+  const activeBirthStep = life ? currentBirthStep(life) : null;
+  const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
 
   useEffect(() => {
     void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
@@ -465,6 +469,11 @@ export default function Home() {
     persistLife(finalizeBirthStats(life));
   }
 
+  function continueBirthFlow() {
+    if (!life) return;
+    persistLife(advanceBirthStep(life));
+  }
+
   function prepareTrialItem(itemId: string) {
     const item = life?.inventory?.find((candidate) => candidate.id === itemId);
     if (!life || !item) return;
@@ -717,97 +726,17 @@ export default function Home() {
                 />
               ) : (
                 <div className="space-y-6">
-                  <div>
-                    <p className="leading-8 text-[#b8c5bd]">{life.birthText}</p>
-                    {life.origin && (
-                      <div className="mt-4 rounded-md border border-[#314b40] bg-[#091511] p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm tracking-[0.16em] text-[#7f9589]">{prologueConfig.character.originResultLabel}</p>
-                          {life.originRoll && (
-                            <span className="flex items-center gap-1 rounded-full border border-[#40584c] px-2.5 py-1 font-mono text-xs text-[#a8b8af]">
-                              <Dices className="h-3.5 w-3.5" />
-                              {prologueConfig.character.originRollLabel} {life.originRoll.value} / {life.originRoll.maximum}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-lg text-[#e9d9a6]">{life.origin.name}</p>
-                        <p className="mt-2 text-sm leading-6 text-[#9caaa2]">{life.origin.description}</p>
-                      </div>
-                    )}
-                    <div className="mt-4 rounded-md border border-[#5a4c2d] bg-[#17170f]/90 p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm tracking-[0.18em] text-[#a8996e]">测灵结果</p>
-                          <h2 className="mt-1 text-xl text-[#efd48d]">{life.root.name}</h2>
-                        </div>
-                      </div>
-                      <p className="mt-4 leading-7 text-[#c5c7b9]">{life.root.reception}</p>
-                      <p className="mt-3 text-sm text-[#91a39a]">天赋「{life.root.talent}」：{life.root.talentText}</p>
-                    </div>
-                  </div>
-
-                  {!statAllocationReady && (
-                    <div className="rounded-md border border-[#5a4c2d] bg-[#15150e] p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm tracking-[0.16em] text-[#a8996e]">初始塑命</p>
-                          <h2 className="mt-1 text-xl text-[#efd48d]">{prologueConfig.character.allocationTitle}</h2>
-                        </div>
-                        <span className="rounded-full bg-[#3c321c] px-3 py-1 text-sm text-[#efd48d]">
-                          {prologueConfig.character.allocationRemainingLabel}：{life.unspentStatPoints ?? 0}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-[#aeb8b1]">{prologueConfig.character.allocationDescription}</p>
-                      <div className="mt-4 grid gap-2 sm:grid-cols-5">
-                        {STAT_LABELS.map(({ key, label }) => {
-                          const allocated = life.statAllocation?.[key] ?? 0;
-                          const maximum = prologueConfig.birth.stats.allocationMaximumPerStat ?? 3;
-                          return (
-                            <div key={key} className="rounded border border-[#3b4d43] bg-[#09120f] p-3 text-center">
-                              <p className="text-xs text-[#87988f]">{label}</p>
-                              <p className="mt-1 font-mono text-lg text-[#f0dfae]">
-                                {life.stats[key]}
-                                {allocated > 0 && <span className="ml-1 text-xs text-[#76b995]">(+{allocated})</span>}
-                              </p>
-                              <div className="mt-2 flex justify-center gap-1">
-                                <Button
-                                  type="button"
-                                  size="icon-sm"
-                                  variant="outline"
-                                  disabled={allocated <= 0}
-                                  onClick={() => changeBirthStat(key, -1)}
-                                  className="border-[#3b5147] bg-transparent text-[#aebdb5] hover:bg-[#17352c]"
-                                  aria-label={`减少${label}`}
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="icon-sm"
-                                  variant="outline"
-                                  disabled={(life.unspentStatPoints ?? 0) <= 0 || allocated >= maximum}
-                                  onClick={() => changeBirthStat(key, 1)}
-                                  className="border-[#6a5930] bg-transparent text-[#e1c878] hover:bg-[#342d1b]"
-                                  aria-label={`增加${label}`}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        type="button"
-                        disabled={(life.unspentStatPoints ?? 0) > 0}
-                        onClick={confirmBirthStats}
-                        className="mt-4 bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]"
-                      >
-                        <Check className="h-4 w-4" />
-                        {prologueConfig.character.allocationConfirmButton}
-                      </Button>
-                    </div>
-                  )}
+                  {activeBirthStep && activeBirthStep !== "ready" ? (
+                    <BirthFlow
+                      life={life}
+                      config={prologueConfig}
+                      step={activeBirthStep}
+                      onContinue={continueBirthFlow}
+                      onChangeStat={changeBirthStat}
+                      onConfirmStats={confirmBirthStats}
+                    />
+                  ) : (
+                    <>
 
                   <div className="rounded-md border border-[#35584a] bg-[#0a1a15] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -823,7 +752,8 @@ export default function Home() {
                     <p className="mt-2 text-xs text-[#dc9b7e]">境界期限：{life.mainQuest.condition}</p>
                   </div>
 
-                  <div className="rounded-md border border-[#394b42] bg-[#091511] p-5">
+                  {sideQuestUnlocked && (
+                    <div className="rounded-md border border-[#394b42] bg-[#091511] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-sm text-[#82968c]">支线 · {life.sideQuestTriggered ? "已触发" : sideQuestUnlocked ? "可触发" : "条件未满足"}</p>
@@ -832,22 +762,17 @@ export default function Home() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!statAllocationReady || life.sideQuestTriggered || !sideQuestUnlocked}
+                        disabled={life.sideQuestTriggered}
                         onClick={beginSideQuest}
                         className="border-[#466155] bg-transparent text-[#bdc8c1] hover:bg-[#17352c] hover:text-white"
                       >
-                        {!statAllocationReady
-                          ? "先完成命格加点"
-                          : life.sideQuestTriggered
-                            ? "线索已收下"
-                            : sideQuestUnlocked
-                              ? "触发线索"
-                              : "尚未解锁"}
+                        {life.sideQuestTriggered ? "线索已收下" : "触发线索"}
                       </Button>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-[#899b92]">解锁条件：{life.sideQuest.condition}</p>
                     <p className="mt-1 text-sm leading-6 text-[#aeb9b2]">{life.sideQuest.summary}</p>
-                  </div>
+                    </div>
+                  )}
 
                   {!life.training ? (
                     <div>
@@ -859,7 +784,6 @@ export default function Home() {
                             key={choice.id}
                             type="button"
                             onClick={() => selectTraining(choice.id)}
-                            disabled={!statAllocationReady}
                             className="choice-card rounded-md border border-[#314b40] bg-[#091511] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
                           >
                             <span className="text-[#ead9a5]">{choice.title}</span>
@@ -892,6 +816,8 @@ export default function Home() {
                       )}
                     </div>
                   )}
+                    </>
+                  )}
                 </div>
               )}
             </section>
@@ -899,10 +825,10 @@ export default function Home() {
             <aside className="space-y-5">
               <section className="ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg text-[#f0dfae]">此世命格</h2>
-                  <span className="text-sm text-[#82968c]">{life ? `${life.realm} · ${life.level}级` : "尚未降生"}</span>
+                  <h2 className="text-lg text-[#f0dfae]">{life && !statAllocationReady ? "入世进度" : "此世命格"}</h2>
+                  <span className="text-sm text-[#82968c]">{life && statAllocationReady ? `${life.realm} · ${life.level}级` : "尚未定命"}</span>
                 </div>
-                {life ? (
+                {life && statAllocationReady ? (
                   <>
                     <div className="mt-4 grid grid-cols-5 gap-2">
                       {STAT_LABELS.map(({ key, label }) => (
@@ -939,11 +865,14 @@ export default function Home() {
                     )}
                   </>
                 ) : (
-                  <p className="mt-4 text-sm leading-6 text-[#71847a]">Roll 点后，这里只展示战斗真正需要的五维与两条资源。</p>
+                  <p className="mt-4 text-sm leading-6 text-[#71847a]">
+                    {life ? prologueConfig.character.earlySidebarText : "掷定此生命数后，从出身开始一步步完成入世。"}
+                  </p>
                 )}
               </section>
 
-              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+              {life && statAllocationReady && (
+                <section className="ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg text-[#f0dfae]">{prologueConfig.character.assetsTitle}</h2>
                   <span className="rounded-full border border-[#5f5335] px-3 py-1 font-mono text-sm text-[#e3c873]">
@@ -1032,9 +961,11 @@ export default function Home() {
                 ) : (
                   <p className="mt-4 text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
                 )}
-              </section>
+                </section>
+              )}
 
-              <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
+              {life && statAllocationReady && (
+                <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
                     <Swords className="h-5 w-5" />
@@ -1121,7 +1052,8 @@ export default function Home() {
                     <p className="mt-2 text-xs leading-5 text-[#566b61]">{prologueConfig.trial.emptyText}</p>
                   </div>
                 )}
-              </section>
+                </section>
+              )}
 
               <section className="ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between">
@@ -1147,27 +1079,31 @@ export default function Home() {
                   {copied ? content.world.copiedInvite : content.world.copyInvite}
                 </Button>
                 {error && <p className="mt-3 text-sm text-[#e99580]">{error}</p>}
-                <div className="mt-5 border-t border-[#29443a] pt-4">
-                  <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.death.title}</p>
-                  <p className="mt-2 text-xs leading-5 text-[#7f9288]">{prologueConfig.worldRules.death.summary}</p>
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.multiplayerTitle}</p>
-                  <div className="mt-2 space-y-2">
-                    {prologueConfig.worldRules.raids.map((raid) => (
-                      <div key={raid.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm text-[#dce4dc]">{raid.name}</p>
-                          <span className="text-xs text-[#b99a60]">{raid.status}</span>
-                        </div>
-                        <p className="mt-1 text-xs leading-5 text-[#768a80]">{raid.description}</p>
-                        <p className="mt-2 text-xs text-[#60746a]">
-                          {raid.minimumPlayers}–{raid.maximumPlayers} 人 · {raid.unlockRealm}解锁
-                        </p>
+                {life && statAllocationReady && (
+                  <>
+                    <div className="mt-5 border-t border-[#29443a] pt-4">
+                      <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.death.title}</p>
+                      <p className="mt-2 text-xs leading-5 text-[#7f9288]">{prologueConfig.worldRules.death.summary}</p>
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.multiplayerTitle}</p>
+                      <div className="mt-2 space-y-2">
+                        {prologueConfig.worldRules.raids.map((raid) => (
+                          <div key={raid.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm text-[#dce4dc]">{raid.name}</p>
+                              <span className="text-xs text-[#b99a60]">{raid.status}</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-[#768a80]">{raid.description}</p>
+                            <p className="mt-2 text-xs text-[#60746a]">
+                              {raid.minimumPlayers}–{raid.maximumPlayers} 人 · {raid.unlockRealm}解锁
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
               </section>
             </aside>
           </div>
