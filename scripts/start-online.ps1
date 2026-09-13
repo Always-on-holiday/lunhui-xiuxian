@@ -20,6 +20,8 @@ $configPath = Join-Path $projectDir "dist\server\wrangler.json"
 $builtWorkerPath = Join-Path $projectDir "dist\server\index.js"
 $frameworkScriptPath = Join-Path $projectDir "scripts\run-framework.mjs"
 $saveConfigPath = Join-Path $projectDir "wrangler.save.json"
+$packagePath = Join-Path $projectDir "package.json"
+$lockfilePath = Join-Path $projectDir "pnpm-lock.yaml"
 $projectRoot = Split-Path -Parent $projectDir
 $saveRoot = Join-Path $projectRoot "世界存档"
 $activeWorldPath = Join-Path $saveRoot "默认世界"
@@ -28,14 +30,46 @@ $contentSourcePath = Join-Path $projectDir "public\游戏内容"
 $contentTargetPath = Join-Path $projectDir "dist\client\游戏内容"
 
 if (
-    -not (Test-Path -LiteralPath $wranglerPath) -or
     -not (Test-Path -LiteralPath $frameworkScriptPath) -or
-    -not (Test-Path -LiteralPath $saveConfigPath)
+    -not (Test-Path -LiteralPath $saveConfigPath) -or
+    -not (Test-Path -LiteralPath $packagePath) -or
+    -not (Test-Path -LiteralPath $lockfilePath)
 ) {
     Write-Host "没有找到完整的游戏文件。" -ForegroundColor Red
-    Write-Host "请保留启动器和“网页原型”文件夹原来的位置。"
+    Write-Host "请在 GitHub Desktop 中重新获取项目后再试。"
     Read-Host "按回车关闭"
     exit 1
+}
+
+if (-not (Test-Path -LiteralPath $wranglerPath)) {
+    Write-Host "首次启动，正在自动安装游戏运行文件……" -ForegroundColor Yellow
+    Write-Host "这一步只需执行一次，可能需要几分钟。"
+
+    $pnpmCommand = Get-Command pnpm -ErrorAction SilentlyContinue
+    if ($null -eq $pnpmCommand) {
+        Write-Host "没有找到依赖安装工具。" -ForegroundColor Red
+        Write-Host "请把这个窗口截图发给我。"
+        Read-Host "按回车关闭"
+        exit 1
+    }
+
+    Push-Location $projectDir
+    try {
+        & $pnpmCommand.Source install --frozen-lockfile
+        $installExitCode = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+
+    if ($installExitCode -ne 0 -or -not (Test-Path -LiteralPath $wranglerPath)) {
+        Write-Host "游戏运行文件安装失败。" -ForegroundColor Red
+        Write-Host "请检查网络后重试；若仍失败，请把这个窗口截图发给我。"
+        Read-Host "按回车关闭"
+        exit 1
+    }
+
+    Write-Host "游戏运行文件安装完成。" -ForegroundColor Green
 }
 
 $existingServer = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
