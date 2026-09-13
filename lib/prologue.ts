@@ -1,4 +1,5 @@
 import type { AdventureState } from "@/lib/events";
+import { createLifeTimeline, type LifeTimeline, type TimeSystemRules } from "@/lib/longevity";
 import type {
   CycleSecretState,
   DeathState,
@@ -250,6 +251,7 @@ export type PrologueConfig = {
       status: string;
     }>;
   };
+  timeSystem: TimeSystemRules;
 };
 
 export type PrologueLife = {
@@ -288,6 +290,7 @@ export type PrologueLife = {
   inheritedMemory?: InheritedMemory;
   inheritance?: LifeInheritance;
   cycleSecret?: CycleSecretState;
+  timeline?: LifeTimeline;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
@@ -405,7 +408,9 @@ export function isPrologueConfig(value: unknown): value is PrologueConfig {
       && candidate.trial
       && candidate.trial.comparisons
       && candidate.trial.outcomes
-      && candidate.worldRules,
+      && candidate.worldRules
+      && candidate.timeSystem?.lifespan
+      && candidate.timeSystem?.costs,
   );
 }
 
@@ -465,7 +470,7 @@ export function rollBirth(config: PrologueConfig, inheritance?: LifeInheritance,
     ? config.character.hiddenTalents[originConfig.hiddenTalentId]
     : undefined;
 
-  return applyInheritance({
+  const inheritedLife = applyInheritance({
     version: 1,
     level: config.birth.level,
     realm: config.birth.realm,
@@ -510,6 +515,10 @@ export function rollBirth(config: PrologueConfig, inheritance?: LifeInheritance,
     statAllocationFinalized: (config.birth.stats.allocationPoints ?? 5) <= 0,
     prologueStep: "origin",
   }, inheritance, cycle);
+  return {
+    ...inheritedLife,
+    timeline: createLifeTimeline(inheritedLife, config.timeSystem),
+  };
 }
 
 export function currentBirthStep(life: PrologueLife): BirthStep {

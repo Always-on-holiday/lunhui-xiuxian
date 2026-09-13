@@ -14,12 +14,13 @@ type BirthFlowProps = {
   life: PrologueLife;
   config: PrologueConfig;
   step: Exclude<BirthStep, "ready">;
+  timeCostDays: number;
   onContinue(): void;
   onChangeStat(stat: keyof FiveStats, direction: 1 | -1): void;
   onConfirmStats(): void;
 };
 
-export function BirthFlow({ life, config, step, onContinue, onChangeStat, onConfirmStats }: BirthFlowProps) {
+export function BirthFlow({ life, config, step, timeCostDays, onContinue, onChangeStat, onConfirmStats }: BirthFlowProps) {
   const steps = [
     { id: "origin", label: config.character.originStepLabel },
     { id: "root", label: config.character.rootStepLabel },
@@ -30,7 +31,10 @@ export function BirthFlow({ life, config, step, onContinue, onChangeStat, onConf
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div className="rounded-md border border-[#2c443a] bg-[#08130f] px-4 py-3">
-        <p className="mb-3 text-center text-xs tracking-[0.18em] text-[#71847a]">{config.character.birthProgressTitle}</p>
+        <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#71847a]">
+          <p className="tracking-[0.18em]">{config.character.birthProgressTitle}</p>
+          <p>每次推进耗时 {timeCostDays} 天</p>
+        </div>
         <div className="grid grid-cols-3 gap-2">
           {steps.map((item, index) => (
             <div key={item.id} className="text-center">

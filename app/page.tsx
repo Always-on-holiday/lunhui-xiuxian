@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventScene } from "@/components/event-scene";
 import { BirthFlow } from "@/components/birth-flow";
+import { LongevityPanel } from "@/components/longevity-panel";
 import { CycleSecretScene, InheritanceScene, SoulScene } from "@/components/reincarnation-scenes";
 import {
   continueVillageAdventure,
@@ -47,6 +48,13 @@ import {
   toggleTrialItem,
   triggerSideQuest,
 } from "@/lib/prologue";
+import {
+  isLifeExpired,
+  normalizeLifeTimeline,
+  renewLifeAfterRevival,
+  spendLifeTime,
+  tickLifeTime,
+} from "@/lib/longevity";
 import {
   applyPendingSpiritLoss,
   completeCycleSecret,
@@ -187,6 +195,7 @@ export default function Home() {
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
   const activeBirthStep = life ? currentBirthStep(life) : null;
   const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
+  const lifeExpired = isLifeExpired(life);
 
   useEffect(() => {
     void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
@@ -358,7 +367,9 @@ export default function Home() {
     if (saved) {
       try {
         const candidate = JSON.parse(saved) as PrologueLife;
-        restored = candidate.version === 1 ? candidate : null;
+        restored = candidate.version === 1
+          ? normalizeLifeTimeline(candidate, prologueConfig.timeSystem)
+          : null;
       } catch {
         localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
       }
@@ -385,7 +396,21 @@ export default function Home() {
       setPastLives(restoredPastLives);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [session]);
+  }, [prologueConfig.timeSystem, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setInterval(() => {
+      setLife((current) => {
+        if (!current || current.deathState) return current;
+        const next = tickLifeTime(current, prologueConfig.timeSystem);
+        if (next === current) return current;
+        localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(next));
+        return next;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [prologueConfig.timeSystem, session]);
 
   useEffect(() => {
     const modelContext = (document as Document & { modelContext?: ModelContext }).modelContext;
@@ -470,9 +495,10 @@ export default function Home() {
 
   const persistLife = useCallback((next: PrologueLife) => {
     if (!session) return;
-    localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(next));
-    setLife(next);
-  }, [session]);
+    const normalized = normalizeLifeTimeline(next, prologueConfig.timeSystem);
+    localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(normalized));
+    setLife(normalized);
+  }, [prologueConfig.timeSystem, session]);
 
   const performRoomAction = useCallback(async (body: Record<string, unknown>) => {
     if (!session) throw new Error("尚未进入世界。");
@@ -553,7 +579,10 @@ export default function Home() {
         return;
       }
       if (player.lifeStatus === "alive" && life.deathState) {
-        persistLife(reviveLife(life, reincarnationConfig));
+        persistLife(renewLifeAfterRevival(
+          reviveLife(life, reincarnationConfig),
+          prologueConfig.timeSystem,
+        ));
         setItemNotice("招魂成功。你已回到死亡前的境界，并获得一条死亡命格。");
         return;
       }
@@ -565,10 +594,10 @@ export default function Home() {
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [archiveCurrentLife, life, performRoomAction, persistLife, reincarnationConfig, room, session]);
+  }, [archiveCurrentLife, life, performRoomAction, persistLife, prologueConfig.timeSystem, reincarnationConfig, room, session]);
 
   useEffect(() => {
-    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure) return;
+    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure || life.deathState || isLifeExpired(life)) return;
     const timer = window.setTimeout(() => {
       persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
     }, 0);
@@ -582,13 +611,23 @@ export default function Home() {
   }
 
   function beginSideQuest() {
-    if (!life || !statAllocationReady) return;
-    persistLife(triggerSideQuest(life));
+    if (!life || !statAllocationReady || life.deathState || lifeExpired) return;
+    persistLife(spendLifeTime(
+      triggerSideQuest(life),
+      prologueConfig.timeSystem.costs.sideQuestDays,
+      "追查支线",
+      prologueConfig.timeSystem,
+    ));
   }
 
   function selectTraining(choiceId: string) {
-    if (!life || !statAllocationReady) return;
-    persistLife(chooseTraining(life, choiceId, prologueConfig.training.choices));
+    if (!life || !statAllocationReady || life.deathState || lifeExpired) return;
+    persistLife(spendLifeTime(
+      chooseTraining(life, choiceId, prologueConfig.training.choices),
+      prologueConfig.timeSystem.costs.trainingDays,
+      "童年修炼",
+      prologueConfig.timeSystem,
+    ));
   }
 
   function changeBirthStat(stat: keyof FiveStats, direction: 1 | -1) {
@@ -607,8 +646,13 @@ export default function Home() {
   }
 
   function continueBirthFlow() {
-    if (!life) return;
-    persistLife(advanceBirthStep(life));
+    if (!life || life.deathState || lifeExpired) return;
+    persistLife(spendLifeTime(
+      advanceBirthStep(life),
+      prologueConfig.timeSystem.costs.birthStepDays,
+      "入世定命",
+      prologueConfig.timeSystem,
+    ));
   }
 
   function prepareTrialItem(itemId: string) {
@@ -627,12 +671,18 @@ export default function Home() {
   }
 
   function startTrial() {
-    if (!life?.training) return;
+    if (!life?.training || life.deathState || lifeExpired) return;
     setItemNotice("");
     const resolved = resolveWoodenTrial(life, prologueConfig.trial);
-    persistLife(resolved.battle?.outcome === "defeat"
+    const next = resolved.battle?.outcome === "defeat"
       ? resolved
-      : startVillageAdventure(resolved, eventConfig, eventEngineConfig));
+      : startVillageAdventure(resolved, eventConfig, eventEngineConfig);
+    persistLife(spendLifeTime(
+      next,
+      prologueConfig.timeSystem.costs.trialDays,
+      "木傀试炼",
+      prologueConfig.timeSystem,
+    ));
   }
 
   function prepareEventItem(itemId: string) {
@@ -647,9 +697,14 @@ export default function Home() {
   }
 
   function chooseEvent(choiceId: string) {
-    if (!life?.adventure) return;
+    if (!life?.adventure || life.deathState || lifeExpired) return;
     setItemNotice("");
-    persistLife(resolveEventChoice(life, eventConfig, choiceId, eventEngineConfig));
+    persistLife(spendLifeTime(
+      resolveEventChoice(life, eventConfig, choiceId, eventEngineConfig),
+      prologueConfig.timeSystem.costs.randomEventDays,
+      "经历随机事件",
+      prologueConfig.timeSystem,
+    ));
   }
 
   function continueEvent() {
@@ -795,10 +850,13 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (!life || !room || life.currentHealth > 0 || life.deathState || lifeActionBusy) return;
+    const diedFromInjury = Boolean(life && life.currentHealth <= 0);
+    const diedFromOldAge = isLifeExpired(life);
+    if (!life || !room || (!diedFromInjury && !diedFromOldAge) || life.deathState || lifeActionBusy) return;
     const timer = window.setTimeout(() => {
       const deadLife = enterSoulState(life, room.worldDay, reincarnationConfig);
       persistLife(deadLife);
+      if (diedFromOldAge) setItemNotice("阳寿耗尽，魂魄离体。你仍可作为残魂行动并等待复活。");
       setLifeActionBusy(true);
       void performRoomAction({ action: "die", deadlineDays: reincarnationConfig.death.deadlineDays })
         .catch((caught) => setItemNotice(caught instanceof Error ? caught.message : "归魂失败。"))
@@ -1013,6 +1071,7 @@ export default function Home() {
                 <EventScene
                   life={life}
                   config={eventConfig}
+                  timeCostDays={prologueConfig.timeSystem.costs.randomEventDays}
                   onChoose={chooseEvent}
                   onContinue={continueEvent}
                 />
@@ -1023,6 +1082,7 @@ export default function Home() {
                       life={life}
                       config={prologueConfig}
                       step={activeBirthStep}
+                      timeCostDays={prologueConfig.timeSystem.costs.birthStepDays}
                       onContinue={continueBirthFlow}
                       onChangeStat={changeBirthStat}
                       onConfirmStats={confirmBirthStats}
@@ -1063,6 +1123,7 @@ export default function Home() {
                     </div>
                     <p className="mt-3 text-sm leading-6 text-[#899b92]">解锁条件：{life.sideQuest.condition}</p>
                     <p className="mt-1 text-sm leading-6 text-[#aeb9b2]">{life.sideQuest.summary}</p>
+                    <p className="mt-2 text-xs text-[#71847a]">追查耗时 {prologueConfig.timeSystem.costs.sideQuestDays} 天</p>
                     </div>
                   )}
 
@@ -1081,6 +1142,7 @@ export default function Home() {
                             <span className="text-[#ead9a5]">{choice.title}</span>
                             <span className="mt-2 block text-sm leading-6 text-[#8fa097]">{choice.description}</span>
                             <span className="mt-3 block text-xs text-[#c49975]">{choice.risk}</span>
+                            <span className="mt-1 block text-xs text-[#71847a]">耗时 {prologueConfig.timeSystem.costs.trainingDays} 天</span>
                           </button>
                         ))}
                       </div>
@@ -1100,6 +1162,7 @@ export default function Home() {
                           </Button>
                         )}
                         <span className="text-xs text-[#bc8d78]">{prologueConfig.trial.riskText}</span>
+                        <span className="text-xs text-[#71847a]">耗时 {prologueConfig.timeSystem.costs.trialDays} 天</span>
                       </div>
                       {life.battle && life.battle.outcome !== "defeat" && (
                         <div className="mt-4 border-t border-[#29443a] pt-4 text-sm text-[#9fc6b3]">
@@ -1185,6 +1248,8 @@ export default function Home() {
                   </p>
                 )}
               </section>
+
+              {life && <LongevityPanel life={life} rules={prologueConfig.timeSystem} />}
 
               {life && statAllocationReady && !life.deathState && (
                 <section className="ink-panel rounded-lg border border-[#29443a] p-5">
