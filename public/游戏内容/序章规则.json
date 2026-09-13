@@ -369,5 +369,36 @@
         "status": "筹备中"
       }
     ]
+  },
+  "timeSystem": {
+    "daysPerYear": 365,
+    "realSecondsPerDay": 60,
+    "startingAgeYears": 7,
+    "lifespan": {
+      "baseYears": 80,
+      "physiqueStat": "defense",
+      "physiqueBaseline": 10,
+      "daysPerPhysiquePoint": 180,
+      "daysPerLevel": 30,
+      "realmBonusYears": {
+        "锻体": 0,
+        "练气": 40,
+        "筑基": 120,
+        "结丹": 300,
+        "元婴": 700,
+        "化神": 1500,
+        "炼虚": 3000,
+        "合体": 6000,
+        "大乘": 12000,
+        "渡劫": 24000
+      }
+    },
+    "costs": {
+      "birthStepDays": 1,
+      "sideQuestDays": 7,
+      "trainingDays": 1095,
+      "trialDays": 30,
+      "randomEventDays": 14
+    }
   }
 }

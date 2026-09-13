@@ -1,4 +1,5 @@
 import type { AdventureState } from "@/lib/events";
+import { createLifeTimeline, type LifeTimeline, type TimeSystemRules } from "@/lib/longevity";
 
 export type StatKey = "attack" | "defense" | "speed" | "intelligence" | "proficiency";
 
@@ -242,6 +243,7 @@ export type PrologueConfig = {
       status: string;
     }>;
   };
+  timeSystem: TimeSystemRules;
 };
 
 export type PrologueLife = {
@@ -274,6 +276,7 @@ export type PrologueLife = {
   training?: TrainingChoice;
   battle?: BattleReport;
   adventure?: AdventureState;
+  timeline?: LifeTimeline;
 };
 
 const STAT_KEYS: StatKey[] = ["attack", "defense", "speed", "intelligence", "proficiency"];
@@ -391,7 +394,9 @@ export function isPrologueConfig(value: unknown): value is PrologueConfig {
       && candidate.trial
       && candidate.trial.comparisons
       && candidate.trial.outcomes
-      && candidate.worldRules,
+      && candidate.worldRules
+      && candidate.timeSystem?.lifespan
+      && candidate.timeSystem?.costs,
   );
 }
 
@@ -451,7 +456,7 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     ? config.character.hiddenTalents[originConfig.hiddenTalentId]
     : undefined;
 
-  return {
+  const life: PrologueLife = {
     version: 1,
     level: config.birth.level,
     realm: config.birth.realm,
@@ -496,6 +501,7 @@ export function rollBirth(config: PrologueConfig): PrologueLife {
     statAllocationFinalized: (config.birth.stats.allocationPoints ?? 5) <= 0,
     prologueStep: "origin",
   };
+  return { ...life, timeline: createLifeTimeline(life, config.timeSystem) };
 }
 
 export function currentBirthStep(life: PrologueLife): BirthStep {

@@ -13,6 +13,7 @@ import type { PrologueLife } from "@/lib/prologue";
 type EventSceneProps = {
   life: PrologueLife;
   config: EventLibraryConfig;
+  timeCostDays: number;
   onChoose(choiceId: string): void;
   onContinue(): void;
 };
@@ -25,7 +26,7 @@ const OUTCOME_LABELS = {
   fixed: "已决定",
 };
 
-export function EventScene({ life, config, onChoose, onContinue }: EventSceneProps) {
+export function EventScene({ life, config, timeCostDays, onChoose, onContinue }: EventSceneProps) {
   const adventure = life.adventure;
   if (!adventure) return null;
   const event = currentRandomEvent(life, config);
@@ -134,6 +135,7 @@ export function EventScene({ life, config, onChoose, onContinue }: EventScenePro
                   <span className="mt-2 block text-sm leading-6 text-[#899b92]">
                     {requirement || choice.risk.failureHint}
                   </span>
+                  <span className="mt-2 block text-xs text-[#71847a]">此行耗时 {timeCostDays} 天</span>
                 </button>
               );
             })}

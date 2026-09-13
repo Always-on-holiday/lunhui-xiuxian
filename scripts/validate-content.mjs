@@ -148,6 +148,31 @@ function validatePrologue(config) {
     }
   }
   if (totalWeight <= 0) fail(`${location}#character.origins`, "出身 Roll 总权重必须大于 0");
+
+  const timeSystem = config.timeSystem;
+  if (!timeSystem?.lifespan || !timeSystem?.costs) {
+    fail(`${location}#timeSystem`, "缺少寿命与时间消耗配置");
+    return;
+  }
+  for (const key of ["daysPerYear", "realSecondsPerDay", "startingAgeYears"]) {
+    if (!Number.isFinite(timeSystem[key]) || timeSystem[key] <= 0) {
+      fail(`${location}#timeSystem.${key}`, "必须是正数");
+    }
+  }
+  if (!config.birth.stats || !(timeSystem.lifespan.physiqueStat in {
+    attack: true,
+    defense: true,
+    speed: true,
+    intelligence: true,
+    proficiency: true,
+  })) {
+    fail(`${location}#timeSystem.lifespan.physiqueStat`, "必须引用有效五维");
+  }
+  for (const [key, value] of Object.entries(timeSystem.costs)) {
+    if (!Number.isInteger(value) || value < 0) {
+      fail(`${location}#timeSystem.costs.${key}`, "耗时必须是非负整数天");
+    }
+  }
 }
 
 function validateFreeActionObjects(content, freeConfig) {
