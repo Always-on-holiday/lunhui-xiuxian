@@ -1533,8 +1533,8 @@ export default function Home() {
               )}
             </section>
 
-            <aside className="space-y-5">
-              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+            <aside className="flex flex-col gap-5">
+              <section className="order-1 ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg text-[#f0dfae]">{life && !statAllocationReady ? "入世进度" : "此世命格"}</h2>
                   <span className="text-sm text-[#82968c]">{life && statAllocationReady ? `${life.realm} · ${life.level}级` : "尚未定命"}</span>
@@ -1605,10 +1605,14 @@ export default function Home() {
                 )}
               </section>
 
-              {life && <LongevityPanel life={life} rules={prologueConfig.timeSystem} />}
+              {life && (
+                <div className="order-2">
+                  <LongevityPanel life={life} rules={prologueConfig.timeSystem} />
+                </div>
+              )}
 
               {life && statAllocationReady && !life.deathState && (
-                <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+                <section className="order-4 ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg text-[#f0dfae]">{prologueConfig.character.assetsTitle}</h2>
                   <span className="rounded-full border border-[#5f5335] px-3 py-1 font-mono text-sm text-[#e3c873]">
@@ -1622,7 +1626,7 @@ export default function Home() {
                       <TabsTrigger value="cultivation">{prologueConfig.character.cultivationTab}</TabsTrigger>
                       <TabsTrigger value="technique">{prologueConfig.character.techniqueTab}</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="inventory" className="mt-4">
+                    <TabsContent value="inventory" className="mt-4 max-h-[360px] overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
                       {(life.inventory ?? []).some((item) => item.quantity > 0) ? (
                         <div className="space-y-3">
                            {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
@@ -1683,7 +1687,7 @@ export default function Home() {
                         <p className="text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
                       )}
                     </TabsContent>
-                    <TabsContent value="cultivation" className="mt-4 space-y-3">
+                    <TabsContent value="cultivation" className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
                       {(life.cultivationArts ?? []).length > 0 ? (life.cultivationArts ?? []).map((ability) => (
                         <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
                           <div className="flex items-center justify-between gap-3">
@@ -1694,7 +1698,7 @@ export default function Home() {
                         </div>
                       )) : <p className="text-sm text-[#71847a]">{prologueConfig.character.cultivationEmpty}</p>}
                     </TabsContent>
-                    <TabsContent value="technique" className="mt-4 space-y-3">
+                    <TabsContent value="technique" className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
                       {(life.techniques ?? []).length > 0 ? (life.techniques ?? []).map((ability) => (
                         <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
                           <div className="flex items-center justify-between gap-3">
@@ -1713,7 +1717,7 @@ export default function Home() {
               )}
 
               {life && statAllocationReady && !life.deathState && (
-                <section className="battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
+                <section className="order-3 battle-window ink-panel rounded-lg border border-[#3f554b] p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
                     <Swords className="h-5 w-5" />
@@ -1803,7 +1807,7 @@ export default function Home() {
                 </section>
               )}
 
-              <section className="ink-panel rounded-lg border border-[#29443a] p-5">
+              <section className="order-5 ink-panel rounded-lg border border-[#29443a] p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-base text-[#f0dfae]">
                     <Users className="h-4 w-4" />
