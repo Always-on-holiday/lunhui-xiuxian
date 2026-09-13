@@ -41,6 +41,7 @@
 - 出身会按 origins 中的 weight 进行 1—总权重 Roll，并把本次点数显示在出身卡片上。
 - 新生流程按“出身 → 测灵 → 命格”逐页推进；确认命格前不会显示主线、修行、行囊或战斗区域。
 - 支线在条件未满足时完全隐藏，达到条件后才显示名称、说明和触发按钮。
+- 完成入世后，右侧“此世命格”会常驻显示灵根与天赋，避免游玩途中遗忘。
 - 支线 unlock 为 null 时会直接解锁；填写 stat 和 minimum 时，会检查指定五维是否达到要求。
 - origins 控制出身。修真世家的 startingCultivationRoll 会按 weight 再抽取一部功法。
 - cultivationArts、techniques 和 items 是内容目录；出身中填写对应 id，人物才会实际拥有它。

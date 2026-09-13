@@ -189,6 +189,8 @@ export type PrologueConfig = {
     originContinueButton: string;
     rootContinueButton: string;
     earlySidebarText: string;
+    rootSummaryLabel: string;
+    talentSummaryLabel: string;
     assetsTitle: string;
     spiritStoneLabel: string;
     inventoryTab: string;

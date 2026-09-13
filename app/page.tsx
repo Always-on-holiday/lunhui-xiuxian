@@ -830,6 +830,15 @@ export default function Home() {
                 </div>
                 {life && statAllocationReady ? (
                   <>
+                    <div className="mt-4 rounded border border-[#4a5036] bg-[#11170f] px-3 py-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs text-[#82968c]">{prologueConfig.character.rootSummaryLabel}</span>
+                        <strong className="text-sm font-normal text-[#e7d49c]">{life.root.name}</strong>
+                      </div>
+                      <p className="mt-1.5 text-xs text-[#8da096]" title={life.root.talentText}>
+                        {prologueConfig.character.talentSummaryLabel}「{life.root.talent}」
+                      </p>
+                    </div>
                     <div className="mt-4 grid grid-cols-5 gap-2">
                       {STAT_LABELS.map(({ key, label }) => (
                         <div key={key} className="rounded border border-[#29443a] bg-[#091511] px-2 py-3 text-center">
