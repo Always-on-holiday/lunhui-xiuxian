@@ -74,8 +74,18 @@ $needsBuild = -not (Test-Path -LiteralPath $configPath) -or
 if ($needsBuild) {
     Write-Host "检测到网页程序有更新，正在自动构建……" -ForegroundColor Yellow
     & $nodePath $frameworkScriptPath build
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $configPath)) {
+    $buildExitCode = $LASTEXITCODE
+
+    if ($buildExitCode -ne 0) {
+        Write-Host "第一次更新未完成，等待文件占用释放后自动重试……" -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        & $nodePath $frameworkScriptPath build
+        $buildExitCode = $LASTEXITCODE
+    }
+
+    if ($buildExitCode -ne 0 -or -not (Test-Path -LiteralPath $configPath)) {
         Write-Host "网页更新失败，请把这个窗口截图发给我。" -ForegroundColor Red
+        Write-Host "若刚关闭过旧联机窗口，请等待数秒后重新双击启动器。" -ForegroundColor Yellow
         Read-Host "按回车关闭"
         exit 1
     }
