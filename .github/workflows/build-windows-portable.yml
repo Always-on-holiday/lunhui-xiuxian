@@ -1,0 +1,97 @@
+name: 构建 Windows 单文件版
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: 获取代码
+        uses: actions/checkout@v7
+
+      - name: 准备 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+
+      - name: 准备 pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: 安装与检查
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run content:check
+          pnpm run build
+
+      - name: 组装免安装运行文件
+        shell: pwsh
+        run: |
+          $payload = Join-Path $env:RUNNER_TEMP "lunhui-payload"
+          $app = Join-Path $payload "app"
+          $node = Join-Path $payload "node"
+          $bin = Join-Path $payload "bin"
+          New-Item -ItemType Directory -Force -Path $app, $node, $bin | Out-Null
+
+          Copy-Item dist $app -Recurse
+          Copy-Item drizzle $app -Recurse
+          New-Item -ItemType Directory -Force -Path (Join-Path $app "scripts") | Out-Null
+          Copy-Item scripts/sites-env.mjs (Join-Path $app "scripts/sites-env.mjs")
+          Copy-Item wrangler.save.json $app
+          Copy-Item packaging/windows-runtime-package.json (Join-Path $app "package.json")
+          npm install --prefix $app --omit=dev --package-lock=false --ignore-scripts=false --no-audit --no-fund
+
+          $nodeArchive = Join-Path $env:RUNNER_TEMP "node.zip"
+          Invoke-WebRequest "https://nodejs.org/dist/v22.13.0/node-v22.13.0-win-x64.zip" -OutFile $nodeArchive
+          $nodeExpanded = Join-Path $env:RUNNER_TEMP "node-expanded"
+          Expand-Archive $nodeArchive $nodeExpanded -Force
+          Copy-Item (Join-Path $nodeExpanded "node-v22.13.0-win-x64/node.exe") $node
+
+          Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile (Join-Path $bin "cloudflared.exe")
+
+          $payloadZip = Join-Path $PWD "packaging/windows-launcher/Payload.zip"
+          Compress-Archive (Join-Path $payload "*") $payloadZip -CompressionLevel Optimal
+
+      - name: 准备 .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: 生成单文件 EXE
+        shell: pwsh
+        run: |
+          dotnet publish packaging/windows-launcher/LunhuiXiuxian.Launcher.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --output release/windows-x64 `
+            -p:PublishSingleFile=true `
+            -p:SelfContained=true
+          Move-Item "release/windows-x64/轮回仙途.exe" "release/轮回仙途-Windows-x64.exe"
+
+      - name: 保存下载文件
+        uses: actions/upload-artifact@v7
+        with:
+          name: 轮回仙途-Windows-x64
+          path: release/轮回仙途-Windows-x64.exe
+          if-no-files-found: error
+
+      - name: 添加到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ github.ref_name }}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "${{ github.ref_name }}" --title "轮回仙途 ${{ github.ref_name }}" --generate-notes
+          }
+          gh release upload "${{ github.ref_name }}" "release/轮回仙途-Windows-x64.exe" --clobber
