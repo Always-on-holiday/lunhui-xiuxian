@@ -1425,10 +1425,12 @@ export default function Home() {
                       </div>
                     </details>
                   )}
-                  <Button onClick={() => beginLife()} className="h-12 bg-[#d6b66d] px-7 text-[#102019] hover:bg-[#e7cc8b]">
-                    <Dices className="h-4 w-4" />
-                    {prologueConfig.intro.rollButton}
-                  </Button>
+                  <div className="flex justify-center py-8 sm:py-10">
+                    <Button onClick={() => beginLife()} className="h-14 bg-[#d6b66d] px-10 text-base text-[#102019] shadow-[0_8px_24px_rgba(214,182,109,0.12)] hover:bg-[#e7cc8b]">
+                      <Dices className="h-5 w-5" />
+                      {prologueConfig.intro.rollButton}
+                    </Button>
+                  </div>
                 </div>
                 )
               ) : life.deathState ? (
