@@ -16,6 +16,9 @@ type EventSceneProps = {
   config: EventLibraryConfig;
   timeCostDays: number;
   npcActions?: ReactNode;
+  pendingChoiceId?: string;
+  rolling?: boolean;
+  resolutionReady?: boolean;
   onChoose(choiceId: string): void;
   onContinue(): void;
 };
@@ -28,7 +31,7 @@ const OUTCOME_LABELS = {
   fixed: "已决定",
 };
 
-export function EventScene({ life, config, timeCostDays, npcActions, onChoose, onContinue }: EventSceneProps) {
+export function EventScene({ life, config, timeCostDays, npcActions, pendingChoiceId, rolling = false, resolutionReady = true, onChoose, onContinue }: EventSceneProps) {
   const adventure = life.adventure;
   if (!adventure) return null;
   const event = currentRandomEvent(life, config);
@@ -53,7 +56,13 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
         </p>
       </div>
 
-      {resolution ? (
+      {resolution && !resolutionReady ? (
+        <div className="rounded-lg border border-[#4b5239] bg-[#11170f] px-5 py-10 text-center">
+          <Dices className="slow-pulse mx-auto h-7 w-7 text-[#d6b66d]" />
+          <p className="mt-3 text-[#ddcb92]">命数正在落定……</p>
+          <p className="mt-2 text-sm text-[#788b81]">请看右侧判定，结果将在比较结束后揭晓。</p>
+        </div>
+      ) : resolution ? (
         <div className="rounded-lg border border-[#65583b] bg-[#17170f]/90 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -126,9 +135,10 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
                 <button
                   key={choice.id}
                   type="button"
-                  disabled={Boolean(requirement)}
+                  disabled={Boolean(requirement) || Boolean(pendingChoiceId) || rolling}
+                  aria-pressed={pendingChoiceId === choice.id}
                   onClick={() => onChoose(choice.id)}
-                  className="choice-card w-full rounded-md border border-[#314b40] bg-[#08130f] p-3 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                  className={`choice-card w-full rounded-md border p-3 text-left transition disabled:cursor-not-allowed disabled:hover:translate-y-0 ${pendingChoiceId === choice.id ? "border-[#a4874b] bg-[#1a1a10] shadow-[inset_0_0_0_1px_rgba(214,182,109,0.12)]" : "border-[#314b40] bg-[#08130f] hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:opacity-45"}`}
                 >
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[#ead9a5]">{choice.text}</span>
@@ -144,6 +154,11 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
               );
             })}
           </div>
+          {pendingChoiceId && (
+            <p className="mt-3 rounded border border-[#5c5134] bg-[#18160e] px-3 py-2 text-center text-sm text-[#d8c17e]">
+              做法已选定，请在右侧点击命数骰。
+            </p>
+          )}
           <p className="mt-4 text-xs leading-5 text-[#71847a]">
             可先在右侧背包勾选任意道具。结算时只有符合当前场景的道具生效，无用道具不会消耗。
           </p>

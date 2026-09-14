@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventScene } from "@/components/event-scene";
+import { EventJudgement } from "@/components/event-judgement";
 import { BirthFlow } from "@/components/birth-flow";
 import { CycleSecretScene, InheritanceScene, SoulScene } from "@/components/reincarnation-scenes";
 import {
@@ -244,6 +245,9 @@ export default function Home() {
   const [activeActionTarget, setActiveActionTarget] = useState<string | null>(null);
   const [freeActionNotice, setFreeActionNotice] = useState<{ targetKey: string; text: string; danger: boolean } | null>(null);
   const [sidebarView, setSidebarView] = useState<"character" | "assets" | "companions">("character");
+  const [pendingEventChoice, setPendingEventChoice] = useState<{ drawId: string; choiceId: string } | null>(null);
+  const [eventDiceRolling, setEventDiceRolling] = useState(false);
+  const [eventResolutionReady, setEventResolutionReady] = useState(true);
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
   const activeBirthStep = life ? currentBirthStep(life) : null;
   const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
@@ -768,18 +772,40 @@ export default function Home() {
 
   function chooseEvent(choiceId: string) {
     if (!life?.adventure || life.deathState || lifeExpired) return;
+    const event = currentRandomEvent(life, eventConfig);
+    if (!event?.choices.some((choice) => choice.id === choiceId) || !life.adventure.currentDrawId) return;
     setItemNotice("");
-    persistLife(spendLifeTime(
-      resolveEventChoice(life, eventConfig, choiceId, eventEngineConfig),
-      prologueConfig.timeSystem.costs.randomEventDays,
-      "经历随机事件",
-      prologueConfig.timeSystem,
-    ));
+    setPendingEventChoice({ drawId: life.adventure.currentDrawId, choiceId });
+  }
+
+  async function rollEventChoice() {
+    if (!life?.adventure || life.deathState || lifeExpired || eventDiceRolling || !pendingEventChoice) return;
+    if (pendingEventChoice.drawId !== life.adventure.currentDrawId) return;
+    const choiceId = pendingEventChoice.choiceId;
+    setEventDiceRolling(true);
+    setEventResolutionReady(false);
+    try {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 900));
+      const resolvedLife = spendLifeTime(
+        resolveEventChoice(life, eventConfig, choiceId, eventEngineConfig),
+        prologueConfig.timeSystem.costs.randomEventDays,
+        "经历随机事件",
+        prologueConfig.timeSystem,
+      );
+      persistLife(resolvedLife);
+      setPendingEventChoice(null);
+      window.setTimeout(() => setEventResolutionReady(true), 3000);
+    } finally {
+      setEventDiceRolling(false);
+    }
   }
 
   function continueEvent() {
     if (!life?.adventure) return;
     setItemNotice("");
+    setPendingEventChoice(null);
+    setEventDiceRolling(false);
+    setEventResolutionReady(true);
     persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
@@ -1240,6 +1266,11 @@ export default function Home() {
       .filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
     const awaitingInheritance = !life && room.cycle > 1 && pastLives.length > 0;
     const activeEventNpc = eventNpcActionSelection();
+    const activeEvent = life?.adventure ? currentRandomEvent(life, eventConfig) : null;
+    const validPendingEventChoice = pendingEventChoice?.drawId === life?.adventure?.currentDrawId
+      ? pendingEventChoice
+      : null;
+    const pendingEventChoiceText = activeEvent?.choices.find((choice) => choice.id === validPendingEventChoice?.choiceId)?.text;
     return (
       <main className="world-grid min-h-screen px-3 py-3 sm:px-5 lg:h-screen lg:overflow-hidden lg:px-7">
         <div className="mx-auto max-w-[1480px]">
@@ -1460,6 +1491,9 @@ export default function Home() {
                   config={eventConfig}
                   timeCostDays={prologueConfig.timeSystem.costs.randomEventDays}
                   npcActions={activeEventNpc ? renderEventNpcActions(activeEventNpc) : undefined}
+                  pendingChoiceId={validPendingEventChoice?.choiceId}
+                  rolling={eventDiceRolling}
+                  resolutionReady={eventResolutionReady}
                   onChoose={chooseEvent}
                   onContinue={continueEvent}
                 />
@@ -1781,55 +1815,25 @@ export default function Home() {
                     {life?.adventure ? "事件判定" : prologueConfig.trial.windowTitle}
                   </h2>
                   <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">
-                    {life?.adventure ? "即时结算" : prologueConfig.trial.windowBadge}
+                    {life?.adventure
+                      ? eventDiceRolling
+                        ? "掷骰中"
+                        : life.adventure.lastResolution
+                          ? eventResolutionReady ? "判定完成" : "命数揭示中"
+                          : validPendingEventChoice
+                            ? "等待掷骰"
+                            : "等待选择"
+                      : prologueConfig.trial.windowBadge}
                   </span>
                 </div>
                 {life?.adventure ? (
-                  life.adventure.lastResolution ? (
-                    <div className="mt-4">
-                      {life.adventure.lastResolution.calculation ? (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
-                            <span className="text-[#93a59b]">{life.adventure.lastResolution.calculation.statLabel}</span>
-                            <span className="text-[#d8dfda]">{life.adventure.lastResolution.calculation.statValue}</span>
-                          </div>
-                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
-                            <span className="text-[#93a59b]">功法 / 技法 / 特性</span>
-                            <span className="text-[#d8dfda]">
-                              +{life.adventure.lastResolution.calculation.cultivationBonus
-                                + life.adventure.lastResolution.calculation.techniqueBonus
-                                + life.adventure.lastResolution.calculation.modifierBonus}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
-                            <span className="text-[#93a59b]">道具 / 随机</span>
-                            <span className="text-[#d8dfda]">
-                              +{life.adventure.lastResolution.calculation.itemBonus} / +{life.adventure.lastResolution.calculation.randomRoll}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-[1fr_auto] gap-3 rounded border border-[#3f594c] bg-[#10211b] px-3 py-2 text-sm">
-                            <span className="text-[#b6c4bc]">最终比较</span>
-                            <span className={life.adventure.lastResolution.calculation.margin >= 0 ? "text-[#8fc9aa]" : "text-[#d58b79]"}>
-                              {life.adventure.lastResolution.calculation.total} : {life.adventure.lastResolution.calculation.difficulty}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="rounded border border-[#253b32] bg-[#08120f] px-3 py-3 text-sm text-[#93a59b]">此选项无需判定，直接结算。</p>
-                      )}
-                      <div className="mt-4 rounded-md border border-[#486a58] bg-[#10241c] p-4">
-                        <p className="text-lg text-[#f1dfaa]">{life.adventure.lastResolution.title}</p>
-                        <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.adventure.lastResolution.resultText}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">
-                      <p className="text-sm text-[#71847a]">等待你的选择</p>
-                      <p className="mt-2 text-xs leading-5 text-[#566b61]">
-                        选择后只在这里展示关键加成与最终比较，不展开冗长战斗日志。
-                      </p>
-                    </div>
-                  )
+                  <EventJudgement
+                    resolution={life.adventure.lastResolution}
+                    pendingChoiceText={pendingEventChoiceText}
+                    rolling={eventDiceRolling}
+                    onRoll={() => void rollEventChoice()}
+                    onCancel={() => setPendingEventChoice(null)}
+                  />
                 ) : life?.battle ? (
                   <div className="mt-4">
                     <div className="space-y-2">
