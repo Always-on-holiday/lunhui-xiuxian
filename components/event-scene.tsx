@@ -37,8 +37,8 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
   const targetCount = config.stage.randomEncountersPerLife;
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-md border border-[#35584a] bg-[#0a1a15] p-5">
+    <div className="space-y-4">
+      <div className="rounded-md border border-[#35584a] bg-[#0a1a15] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2 text-[#e8d79e]">
             <ScrollText className="h-4 w-4" />
@@ -48,13 +48,13 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
             经历 {adventure.resolvedCount} / {targetCount}
           </span>
         </div>
-        <p className="mt-3 text-sm leading-6 text-[#aebbb4]">
+        <p className="mt-2 text-sm leading-6 text-[#aebbb4]">
           {adventure.stageComplete ? config.stage.completion.nextStageHint : mainline?.guidance}
         </p>
       </div>
 
       {resolution ? (
-        <div className="rounded-lg border border-[#65583b] bg-[#17170f]/90 p-5 sm:p-6">
+        <div className="rounded-lg border border-[#65583b] bg-[#17170f]/90 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm tracking-[0.18em] text-[#a8996e]">事件结算</p>
@@ -64,8 +64,8 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
               {OUTCOME_LABELS[resolution.outcome]}
             </span>
           </div>
-          <p className="mt-4 text-sm text-[#87998f]">你的选择：{resolution.choiceText}</p>
-          <p className="mt-4 leading-8 text-[#c6cec8]">{resolution.resultText}</p>
+          <p className="mt-3 text-sm text-[#87998f]">你的选择：{resolution.choiceText}</p>
+          <p className="mt-3 leading-7 text-[#c6cec8]">{resolution.resultText}</p>
 
           {(resolution.itemMessages.length > 0 || resolution.uselessItemNames.length > 0) && (
             <div className="mt-4 space-y-2 rounded border border-[#4d4931] bg-[#12150e] p-4">
@@ -88,7 +88,7 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
             </div>
           )}
 
-          <Button onClick={onContinue} className="mt-6 bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+          <Button onClick={onContinue} className="mt-4 bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
             {adventure.stageComplete ? "完成新手村阶段" : "继续前行"}
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -101,7 +101,7 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
           <p className="mt-2 text-sm text-[#7f9589]">当前版本暂时开放至 10 级，下一阶段事件库接入后可继续。</p>
         </div>
       ) : event ? (
-        <div className="rounded-lg border border-[#314b40] bg-[#091511] p-5 sm:p-6">
+        <div className="rounded-lg border border-[#314b40] bg-[#091511] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="flex items-center gap-2 text-sm tracking-[0.18em] text-[#7ea28f]">
@@ -114,11 +114,11 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
               适合 {event.levelRange[0]}—{event.levelRange[1]} 级
             </span>
           </div>
-          <p className="mt-5 leading-8 text-[#c1cac4]">{event.intro}</p>
+          <p className="mt-3 leading-7 text-[#c1cac4]">{event.intro}</p>
 
           {npcActions}
 
-          <div className="mt-6 space-y-3">
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {event.choices.map((choice) => {
               const requirement = choiceRequirementMessage(choice, life);
               const risk = config.riskGrades[choice.risk.grade];
@@ -128,7 +128,7 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
                   type="button"
                   disabled={Boolean(requirement)}
                   onClick={() => onChoose(choice.id)}
-                  className="choice-card w-full rounded-md border border-[#314b40] bg-[#08130f] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                  className="choice-card w-full rounded-md border border-[#314b40] bg-[#08130f] p-3 text-left transition hover:-translate-y-0.5 hover:border-[#8c7950] hover:bg-[#10211b] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 >
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[#ead9a5]">{choice.text}</span>
@@ -136,10 +136,10 @@ export function EventScene({ life, config, timeCostDays, npcActions, onChoose, o
                       {risk.label}{choice.risk.primaryStat ? ` · ${config.statLabels[choice.risk.primaryStat]}判定` : ""}
                     </span>
                   </span>
-                  <span className="mt-2 block text-sm leading-6 text-[#899b92]">
+                  <span className="mt-1.5 block text-sm leading-5 text-[#899b92]">
                     {requirement || choice.risk.failureHint}
                   </span>
-                  <span className="mt-2 block text-xs text-[#71847a]">此行耗时 {timeCostDays} 天</span>
+                  <span className="mt-1.5 block text-xs text-[#71847a]">此行耗时 {timeCostDays} 天</span>
                 </button>
               );
             })}

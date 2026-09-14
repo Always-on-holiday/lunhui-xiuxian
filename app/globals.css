@@ -103,18 +103,7 @@ input:focus-visible {
 }
 
 .choice-card {
-  min-height: 10.5rem;
-}
-
-.battle-window {
-  position: sticky;
-  top: 1.25rem;
-}
-
-@media (max-width: 1023px) {
-  .battle-window {
-    position: static;
-  }
+  min-height: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
