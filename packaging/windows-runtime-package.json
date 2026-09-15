@@ -1,0 +1,7 @@
+{
+  "name": "lunhui-xiuxian-windows-runtime",
+  "private": true,
+  "dependencies": {
+    "wrangler": "4.92.0"
+  }
+}
