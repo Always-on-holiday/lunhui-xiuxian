@@ -144,6 +144,8 @@
         "description": "进阵前填饱肚子，承受反击 +1。",
         "quantity": 1,
         "consumable": true,
+        "tags": ["food"],
+        "toxicity": 0,
         "effects": [
           {
             "contextId": "wooden_trial",
@@ -296,16 +298,17 @@
   "trial": {
     "contextId": "wooden_trial",
     "title": "青崖门木傀试炼",
-    "description": "你只需决定是否入阵。攻防、先手与应变全部由程序比较，详细过程收在右侧小窗。",
+    "description": "TEST 试演：入阵后亲手投掷一枚十面命数骰。木傀数值较高，失败只会受伤并积累经验，不会死亡。",
     "riskText": "风险：可能受伤 · 序章保护不会死亡",
-    "startButton": "开始自动战斗",
-    "retryButton": "调息后再战",
+    "startButton": "TEST · 进入木傀试炼",
+    "retryButton": "TEST · 再试一次",
     "completionText": "锻体境主线试玩进度 1 / 1。正式版会在突破后立刻送达下一境界主线。",
     "windowTitle": "战斗演算",
-    "windowBadge": "自动",
+    "windowBadge": "D10",
     "emptyTitle": "尚无战斗",
-    "emptyText": "开战后只显示四项关键比较，并立刻给出战果。",
+    "emptyText": "进入试炼后亲手投掷 D10，再显示四项关键比较与战果。",
     "calculations": {
+      "fateRoll": { "min": 1, "max": 10 },
       "initiativeRandom": { "min": 0, "max": 3 },
       "offenseRandom": { "min": 1, "max": 4 },
       "guardRandom": { "min": 1, "max": 4 },
@@ -315,10 +318,10 @@
       "normalRootBonus": 1
     },
     "comparisons": {
-      "initiative": { "label": "抢占先手", "target": 14 },
-      "offense": { "label": "正面破势", "target": 15 },
-      "guard": { "label": "承受反击", "target": 14 },
-      "technique": { "label": "灵根应变", "target": 15 }
+      "initiative": { "label": "抢占先手", "target": 22 },
+      "offense": { "label": "正面破势", "target": 23 },
+      "guard": { "label": "承受反击", "target": 21 },
+      "technique": { "label": "灵根应变", "target": 22 }
     },
     "victoryMinimumWins": 3,
     "closeMinimumWins": 2,

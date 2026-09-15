@@ -68,6 +68,7 @@ export type BattleReport = {
   comparisons: BattleComparison[];
   healthAfter: number;
   spiritAfter: number;
+  fateRoll?: number;
   usedItems?: string[];
   itemMessages?: string[];
 };
@@ -104,6 +105,8 @@ export type InventoryItem = {
   description: string;
   quantity: number;
   consumable: boolean;
+  tags?: string[];
+  toxicity?: number;
   effects: ItemEffect[];
 };
 
@@ -144,6 +147,7 @@ type TrialRules = {
   emptyTitle: string;
   emptyText: string;
   calculations: {
+    fateRoll: RandomRange;
     initiativeRandom: RandomRange;
     offenseRandom: RandomRange;
     guardRandom: RandomRange;
@@ -615,8 +619,12 @@ export function toggleTrialItem(life: PrologueLife, itemId: string, contextId: s
   return { ...life, selectedTrialItemIds: [...selected] };
 }
 
-export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): PrologueLife {
+export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules, fateRoll?: number): PrologueLife {
   const calculation = rules.calculations;
+  const rolledFate = Math.max(
+    calculation.fateRoll.min,
+    Math.min(calculation.fateRoll.max, Math.round(fateRoll ?? randomInt(calculation.fateRoll.min, calculation.fateRoll.max))),
+  );
   const selectedIds = new Set(life.selectedTrialItemIds ?? []);
   const applicableItems = (life.inventory ?? [])
     .map((item) => ({
@@ -640,15 +648,15 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
   });
   const initiative = life.stats.speed
     + Math.floor(life.stats.intelligence / 2)
-    + randomInt(calculation.initiativeRandom.min, calculation.initiativeRandom.max)
+    + rolledFate
     + (itemBonus.initiative ?? 0);
   const offense = life.stats.attack
     + Math.floor(life.stats.proficiency / 2)
-    + randomInt(calculation.offenseRandom.min, calculation.offenseRandom.max)
+    + rolledFate
     + (itemBonus.offense ?? 0);
   const guard = life.stats.defense
     + Math.floor(life.stats.speed / 3)
-    + randomInt(calculation.guardRandom.min, calculation.guardRandom.max)
+    + rolledFate
     + (itemBonus.guard ?? 0);
   const rootBonus = calculation.preferredRootCounts.includes(life.root.count)
     ? calculation.preferredRootBonus
@@ -656,7 +664,7 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
   const technique = life.stats.intelligence
     + Math.floor(life.stats.proficiency / 3)
     + rootBonus
-    + randomInt(calculation.techniqueRandom.min, calculation.techniqueRandom.max)
+    + rolledFate
     + (itemBonus.technique ?? 0);
 
   const values: Record<TrialComparisonKey, number> = { initiative, offense, guard, technique };
@@ -683,6 +691,7 @@ export function resolveWoodenTrial(life: PrologueLife, rules: TrialRules): Prolo
     comparisons,
     healthAfter: Math.max(1, life.currentHealth - healthLoss),
     spiritAfter: Math.max(0, life.currentSpirit - spiritLoss),
+    fateRoll: rolledFate,
     usedItems: applicableItems.map(({ item }) => item.name),
     itemMessages: applicableItems.map(({ effect }) => effect.message),
     ...rules.outcomes[outcome],

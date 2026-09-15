@@ -61,6 +61,7 @@ import {
   type FreeActionTarget,
 } from "@/lib/free-actions";
 import {
+  formatWorldDate,
   formatYearsAndDays,
   isLifeExpired,
   normalizeLifeTimeline,
@@ -177,7 +178,7 @@ type ActionSelection = {
 
 function itemTags(item: InventoryItem) {
   const text = `${item.name} ${item.category} ${item.description}`;
-  const tags = new Set<string>();
+  const tags = new Set<string>(item.tags ?? []);
   if (/食|粮|肉|果|饼|汤/.test(text)) tags.add("food");
   if (/丹|药|草|灵植/.test(text)) tags.add("herb");
   if (/毒|腐|瘴/.test(text)) tags.add("toxic");
@@ -248,6 +249,8 @@ export default function Home() {
   const [pendingEventChoice, setPendingEventChoice] = useState<{ drawId: string; choiceId: string } | null>(null);
   const [eventDiceRolling, setEventDiceRolling] = useState(false);
   const [eventResolutionReady, setEventResolutionReady] = useState(true);
+  const [trialAwaitingRoll, setTrialAwaitingRoll] = useState(false);
+  const [trialDiceRolling, setTrialDiceRolling] = useState(false);
   const sideQuestUnlocked = life ? canTriggerSideQuest(life) : false;
   const activeBirthStep = life ? currentBirthStep(life) : null;
   const statAllocationReady = activeBirthStep === null || activeBirthStep === "ready";
@@ -586,6 +589,13 @@ export default function Home() {
     return data;
   }, [session]);
 
+  const advanceWorldTime = useCallback((days: number) => {
+    if (days <= 0) return;
+    void performRoomAction({ action: "advance_time", days }).catch(() => {
+      setItemNotice("此行动消耗的时间暂未同步到世界历，请稍后再试。");
+    });
+  }, [performRoomAction]);
+
   const archiveCurrentLife = useCallback((current: PrologueLife) => {
     if (!session) return false;
     const entry: PastLifeArchiveEntry = {
@@ -670,14 +680,6 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [archiveCurrentLife, life, performRoomAction, persistLife, prologueConfig.timeSystem, reincarnationConfig, room, session]);
 
-  useEffect(() => {
-    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure || life.deathState || isLifeExpired(life)) return;
-    const timer = window.setTimeout(() => {
-      persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [eventConfig, eventEngineConfig, life, persistLife]);
-
   function beginLife(inheritance?: LifeInheritance) {
     const cycle = room?.cycle ?? 1;
     persistLife(rollBirth(prologueConfig, inheritance, cycle));
@@ -686,22 +688,26 @@ export default function Home() {
 
   function beginSideQuest() {
     if (!life || !statAllocationReady || life.deathState || lifeExpired) return;
+    const days = prologueConfig.timeSystem.costs.sideQuestDays;
     persistLife(spendLifeTime(
       triggerSideQuest(life),
-      prologueConfig.timeSystem.costs.sideQuestDays,
+      days,
       "追查支线",
       prologueConfig.timeSystem,
     ));
+    advanceWorldTime(days);
   }
 
   function selectTraining(choiceId: string) {
     if (!life || !statAllocationReady || life.deathState || lifeExpired) return;
+    const days = prologueConfig.timeSystem.costs.trainingDays;
     persistLife(spendLifeTime(
       chooseTraining(life, choiceId, prologueConfig.training.choices),
-      prologueConfig.timeSystem.costs.trainingDays,
+      days,
       "童年修炼",
       prologueConfig.timeSystem,
     ));
+    advanceWorldTime(days);
   }
 
   function changeBirthStat(stat: keyof FiveStats, direction: 1 | -1) {
@@ -721,12 +727,14 @@ export default function Home() {
 
   function continueBirthFlow() {
     if (!life || life.deathState || lifeExpired) return;
+    const days = prologueConfig.timeSystem.costs.birthStepDays;
     persistLife(spendLifeTime(
       advanceBirthStep(life),
-      prologueConfig.timeSystem.costs.birthStepDays,
+      days,
       "入世定命",
       prologueConfig.timeSystem,
     ));
+    advanceWorldTime(days);
   }
 
   function prepareTrialItem(itemId: string) {
@@ -747,16 +755,30 @@ export default function Home() {
   function startTrial() {
     if (!life?.training || life.deathState || lifeExpired) return;
     setItemNotice("");
-    const resolved = resolveWoodenTrial(life, prologueConfig.trial);
-    const next = resolved.battle?.outcome === "defeat"
-      ? resolved
-      : startVillageAdventure(resolved, eventConfig, eventEngineConfig);
+    setTrialAwaitingRoll(true);
+  }
+
+  async function rollTrial(forcedRoll?: number) {
+    if (!life?.training || life.deathState || lifeExpired || !trialAwaitingRoll || trialDiceRolling) return;
+    setTrialDiceRolling(true);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 800));
+    const fateRoll = forcedRoll ?? Math.floor(Math.random() * 10) + 1;
+    const resolved = resolveWoodenTrial(life, prologueConfig.trial, fateRoll);
+    const days = prologueConfig.timeSystem.costs.trialDays;
     persistLife(spendLifeTime(
-      next,
-      prologueConfig.timeSystem.costs.trialDays,
+      resolved,
+      days,
       "木傀试炼",
       prologueConfig.timeSystem,
     ));
+    advanceWorldTime(days);
+    setTrialAwaitingRoll(false);
+    setTrialDiceRolling(false);
+  }
+
+  function continueAfterTrial() {
+    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure) return;
+    persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
   function prepareEventItem(itemId: string) {
@@ -793,6 +815,7 @@ export default function Home() {
         prologueConfig.timeSystem,
       );
       persistLife(resolvedLife);
+      advanceWorldTime(prologueConfig.timeSystem.costs.randomEventDays);
       setPendingEventChoice(null);
       window.setTimeout(() => setEventResolutionReady(true), 3000);
     } finally {
@@ -929,18 +952,26 @@ export default function Home() {
       freeActionConfig,
     );
     const succeeded = resolution.outcome === "success" || resolution.outcome === "criticalSuccess";
+    const sourceItem = selection.sourceItemId
+      ? life.inventory?.find((item) => item.id === selection.sourceItemId)
+      : undefined;
+    const sourceTags = sourceItem ? itemTags(sourceItem) : [];
+    const edible = sourceTags.some((tag) => ["food", "herb", "toxic"].includes(tag));
     const consumeItem = Boolean(selection.sourceItemId && (
       actionId === "discard_item"
       || (succeeded && actionId === "destroy_item")
-      || (succeeded && actionId === "eat_item")
+      || (actionId === "eat_item" && edible)
       || (succeeded && actionId === "use_item"
         && life.inventory?.find((item) => item.id === selection.sourceItemId)?.consumable)
     ));
     const accumulatedMinutes = (life.freeActionWorldMinutes ?? 0) + resolution.costs.worldMinutes;
     const elapsedDays = Math.floor(accumulatedMinutes / (24 * 60));
+    const ingestionDamage = actionId === "eat_item" && edible && !succeeded
+      ? Math.max(2, Math.ceil((sourceItem?.toxicity ?? 10) / (resolution.outcome === "criticalFailure" ? 4 : 8)))
+      : 0;
     let nextLife: PrologueLife = {
       ...life,
-      currentHealth: Math.max(1, life.currentHealth - resolution.costs.health),
+      currentHealth: Math.max(1, life.currentHealth - resolution.costs.health - ingestionDamage),
       currentSpirit: Math.max(0, life.currentSpirit - resolution.costs.spirit),
       spiritStones: Math.max(0, (life.spiritStones ?? 0) - resolution.costs.spiritStones),
       inventory: consumeItem
@@ -995,6 +1026,7 @@ export default function Home() {
       nextLife = spendLifeTime(nextLife, elapsedDays, "自由行动", prologueConfig.timeSystem);
     }
     persistLife(nextLife);
+    advanceWorldTime(elapsedDays);
 
     const handoff = resolution.nextSystem === "combat"
       ? resolution.combat?.lethal ? " 结果需要转入致死战斗。" : " 结果需要转入战斗。"
@@ -1003,7 +1035,7 @@ export default function Home() {
     const timeText = resolution.costs.worldMinutes > 0 ? ` 耗时 ${resolution.costs.worldMinutes} 分钟。` : "";
     setFreeActionNotice({
       targetKey: selection.key,
-      text: `${FREE_ACTION_OUTCOME_LABELS[resolution.outcome]}（掷 ${resolution.roll}/${resolution.chance}）：${resolution.message}${handoff}${timeText}`,
+      text: `${FREE_ACTION_OUTCOME_LABELS[resolution.outcome]}（掷 ${resolution.roll}/${resolution.chance}）：${resolution.message}${ingestionDamage > 0 ? ` 药性有毒，气血 -${ingestionDamage}。` : ""}${handoff}${timeText}`,
       danger: resolution.outcome === "failure" || resolution.outcome === "criticalFailure" || resolution.nextSystem === "combat",
     });
     if (consumeItem && (nextLife.inventory?.find((item) => item.id === selection.sourceItemId)?.quantity ?? 0) <= 0) {
@@ -1271,6 +1303,7 @@ export default function Home() {
       ? pendingEventChoice
       : null;
     const pendingEventChoiceText = activeEvent?.choices.find((choice) => choice.id === validPendingEventChoice?.choiceId)?.text;
+    const inventoryItemCount = (life?.inventory ?? []).reduce((total, item) => total + Math.max(0, item.quantity), 0);
     return (
       <main className="world-grid min-h-screen px-3 py-3 sm:px-5 lg:h-screen lg:overflow-hidden lg:px-7">
         <div className="mx-auto max-w-[1480px]">
@@ -1289,7 +1322,7 @@ export default function Home() {
                   <span className="text-[#81968b]">
                     {content.world.calendarLabel}
                     <strong className="ml-2 font-normal text-[#e8eee8]">
-                      {content.world.dayPrefix}{room.worldDay}{content.world.daySuffix}
+                      {formatWorldDate(room.worldDay, prologueConfig.timeSystem.daysPerYear)}
                     </strong>
                   </span>
                   <span className={lifeExpired ? "flex items-center gap-1 text-[#e99580]" : "flex items-center gap-1 text-[#d4bd78]"}>
@@ -1591,7 +1624,10 @@ export default function Home() {
                       </div>
                       {life.battle && life.battle.outcome !== "defeat" && (
                         <div className="mt-4 border-t border-[#29443a] pt-4 text-sm text-[#9fc6b3]">
-                          {prologueConfig.trial.completionText}
+                          <p>{prologueConfig.trial.completionText}</p>
+                          <Button onClick={continueAfterTrial} className="mt-3 bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                            进入青石村
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1619,7 +1655,7 @@ export default function Home() {
                   onClick={() => setSidebarView("assets")}
                   className={`rounded-md px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${sidebarView === "assets" ? "bg-[#19372d] text-[#f0dfae]" : "text-[#82968c] hover:bg-[#10251e] hover:text-[#c7d3cd]"}`}
                 >
-                  行囊{life && statAllocationReady ? ` · ${life.spiritStones ?? 0}` : ""}
+                  行囊{life && statAllocationReady ? ` · ${inventoryItemCount}` : ""}
                 </button>
                 <button
                   type="button"
@@ -1751,18 +1787,33 @@ export default function Home() {
                                        <MousePointer2 className="h-3 w-3" />点击选择行为
                                      </span>
                                    </button>
-                                  {mayPrepare && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => eventPreparing ? prepareEventItem(item.id) : prepareTrialItem(item.id)}
-                                      className={selected
-                                        ? "border-[#b99a56] bg-[#3b321c] text-[#f0d78f] hover:bg-[#4a3e22]"
-                                        : "border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"}
-                                    >
-                                      {selected ? prologueConfig.character.selectedItem : prologueConfig.character.selectItem}
-                                    </Button>
-                                  )}
+                                  <div className="flex shrink-0 flex-col gap-2">
+                                    {itemTags(item).some((tag) => ["food", "herb", "toxic"].includes(tag)) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setActiveActionTarget(actionSelection.key);
+                                          performFreeAction(actionSelection, "eat_item");
+                                        }}
+                                        className="border-[#625539] bg-[#17150d] text-[#dfc77f] hover:bg-[#292313] hover:text-[#f2dfa5]"
+                                      >
+                                        食用
+                                      </Button>
+                                    )}
+                                    {mayPrepare && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => eventPreparing ? prepareEventItem(item.id) : prepareTrialItem(item.id)}
+                                        className={selected
+                                          ? "border-[#b99a56] bg-[#3b321c] text-[#f0d78f] hover:bg-[#4a3e22]"
+                                          : "border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"}
+                                      >
+                                        {selected ? prologueConfig.character.selectedItem : prologueConfig.character.selectItem}
+                                      </Button>
+                                    )}
+                                  </div>
                                  </div>
                                  {renderFreeActionMenu(actionSelection)}
                                </div>
@@ -1823,7 +1874,11 @@ export default function Home() {
                           : validPendingEventChoice
                             ? "等待掷骰"
                             : "等待选择"
-                      : prologueConfig.trial.windowBadge}
+                      : trialDiceRolling
+                        ? "D10 转动中"
+                        : trialAwaitingRoll
+                          ? "等待 D10"
+                          : prologueConfig.trial.windowBadge}
                   </span>
                 </div>
                 {life?.adventure ? (
@@ -1834,8 +1889,38 @@ export default function Home() {
                     onRoll={() => void rollEventChoice()}
                     onCancel={() => setPendingEventChoice(null)}
                   />
+                ) : trialAwaitingRoll ? (
+                  <div className="mt-4 rounded-md border border-[#4b5239] bg-[#10170f] px-4 py-5 text-center">
+                    <p className="text-xs text-[#83958b]">木傀已立于阵中</p>
+                    <p className="mt-1 text-sm text-[#dfcf9e]">木傀四项判定较高，投出 1—10 点加入你的全部比较。</p>
+                    <button
+                      type="button"
+                      disabled={trialDiceRolling}
+                      onClick={() => void rollTrial()}
+                      className="group mx-auto mt-4 grid h-24 w-24 place-items-center rounded-2xl border border-[#806b3d] bg-[radial-gradient(circle_at_35%_25%,#3a321d,#16150e_65%)] text-[#efd27b] shadow-[0_0_28px_rgba(214,182,109,0.14)] transition hover:-translate-y-1 hover:border-[#c6a755] disabled:cursor-wait disabled:hover:translate-y-0"
+                      aria-label={trialDiceRolling ? "十面命数骰转动中" : "投掷十面命数骰"}
+                    >
+                      <Dices className={`h-10 w-10 ${trialDiceRolling ? "dice-cast" : "transition group-hover:rotate-12 group-hover:scale-110"}`} />
+                    </button>
+                    <p className="mt-3 text-sm text-[#b9aa7b]">{trialDiceRolling ? "命数翻转中……" : "点击投掷 D10"}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={trialDiceRolling}
+                      onClick={() => void rollTrial(1)}
+                      className="mt-1 text-xs text-[#8e786b] hover:bg-[#291b17] hover:text-[#dc9a85]"
+                    >
+                      TEST · 固定投出 1 点
+                    </Button>
+                  </div>
                 ) : life?.battle ? (
                   <div className="mt-4">
+                    {life.battle.fateRoll !== undefined && (
+                      <div className="mb-3 flex items-center justify-between rounded border border-[#5b4e31] bg-[#17160e] px-3 py-2">
+                        <span className="text-sm text-[#a99b74]">十面命数骰</span>
+                        <span className="font-mono text-xl text-[#ecd58e]">D10 · {life.battle.fateRoll}</span>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       {life.battle.comparisons.map((item) => (
                         <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">

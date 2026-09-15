@@ -150,6 +150,22 @@ export function formatYearsAndDays(days: number, daysPerYear = FALLBACK_DAYS_PER
   return `${Math.floor(safeDays / safeDaysPerYear)}年${safeDays % safeDaysPerYear}天`;
 }
 
+const WORLD_MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export function formatWorldDate(worldDay: number, daysPerYear = FALLBACK_DAYS_PER_YEAR) {
+  const safeDaysPerYear = positiveInteger(daysPerYear, FALLBACK_DAYS_PER_YEAR);
+  const ordinal = Math.max(1, Math.round(worldDay));
+  const year = Math.floor((ordinal - 1) / safeDaysPerYear) + 1;
+  let dayOfYear = (ordinal - 1) % safeDaysPerYear;
+  let month = 1;
+  for (const daysInMonth of WORLD_MONTH_DAYS) {
+    if (dayOfYear < daysInMonth) break;
+    dayOfYear -= daysInMonth;
+    month += 1;
+  }
+  return `第${year}年 ${month}月${dayOfYear + 1}日`;
+}
+
 export function approximateYears(days: number, daysPerYear = FALLBACK_DAYS_PER_YEAR) {
   const safeDaysPerYear = positiveInteger(daysPerYear, FALLBACK_DAYS_PER_YEAR);
   return Math.round(Math.max(0, days) / safeDaysPerYear);

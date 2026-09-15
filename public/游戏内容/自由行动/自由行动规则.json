@@ -484,8 +484,9 @@
       "fallback": "它在当前对象或场景上没有产生作用，物品没有消耗。"
     },
     "eat_item": {
-      "name": "尝试吃掉",
+      "name": "食用",
       "targets": ["item"],
+      "confirmWhenTags": ["herb", "toxic"],
       "defaultStat": "defense",
       "defaultRisk": "medium",
       "fallbackByTag": {

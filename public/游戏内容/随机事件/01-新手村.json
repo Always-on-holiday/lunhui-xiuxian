@@ -95,6 +95,8 @@
       "category": "材料",
       "description": "药性尚浅，却胜在新鲜。",
       "consumable": true,
+      "tags": ["herb"],
+      "toxicity": 18,
       "effects": [
         { "contextId": "event_wounded_cultivator", "checkBonus": 2, "message": "野药暂时稳住了散修的伤势。" }
       ]
@@ -125,6 +127,8 @@
       "category": "消耗品",
       "description": "味道呛鼻，田间虫豸尤其厌恶。",
       "consumable": true,
+      "tags": ["toxic"],
+      "toxicity": 35,
       "effects": [
         { "contextId": "event_field_pests", "forceOutcome": "criticalSuccess", "message": "虫群闻到烟气，顷刻间散得一干二净。" }
       ]

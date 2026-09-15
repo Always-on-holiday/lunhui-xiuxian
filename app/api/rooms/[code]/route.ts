@@ -153,6 +153,12 @@ export async function PATCH(request: Request, context: RouteContext) {
           playerId,
         ).run();
       }
+    } else if (action === "advance_time") {
+      if (actor.lifeStatus !== "alive") return Response.json({ error: "只有在世修士可以推动世界时间。" }, { status: 409 });
+      const days = boundedNumber(body.days, 1, 3650);
+      await env.DB.prepare(
+        "UPDATE rooms SET world_started_at = strftime('%Y-%m-%dT%H:%M:%fZ', COALESCE(world_started_at, created_at), '-' || ? || ' minutes') WHERE code = ?"
+      ).bind(days, code).run();
     } else if (action === "begin_life") {
       await env.DB.prepare(
         "UPDATE players SET life_status = 'alive', death_day = NULL, revive_deadline_day = NULL, soul_power = 0, last_soul_action_day = NULL WHERE room_code = ? AND id = ? AND life_status IN ('alive', 'rebirth')"
