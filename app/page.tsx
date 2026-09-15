@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Archive, ChevronDown, Copy, Dices, Ghost, Globe2, Heart, Hourglass, LogOut, MousePointer2, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, Copy, Dices, Ghost, Globe2, Heart, Hourglass, LogOut, MousePointer2, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -670,14 +670,6 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [archiveCurrentLife, life, performRoomAction, persistLife, prologueConfig.timeSystem, reincarnationConfig, room, session]);
 
-  useEffect(() => {
-    if (!life?.battle || life.battle.outcome === "defeat" || life.adventure || life.deathState || isLifeExpired(life)) return;
-    const timer = window.setTimeout(() => {
-      persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [eventConfig, eventEngineConfig, life, persistLife]);
-
   function beginLife(inheritance?: LifeInheritance) {
     const cycle = room?.cycle ?? 1;
     persistLife(rollBirth(prologueConfig, inheritance, cycle));
@@ -748,15 +740,23 @@ export default function Home() {
     if (!life?.training || life.deathState || lifeExpired) return;
     setItemNotice("");
     const resolved = resolveWoodenTrial(life, prologueConfig.trial);
-    const next = resolved.battle?.outcome === "defeat"
-      ? resolved
-      : startVillageAdventure(resolved, eventConfig, eventEngineConfig);
     persistLife(spendLifeTime(
-      next,
+      resolved,
       prologueConfig.timeSystem.costs.trialDays,
       "木傀试炼",
       prologueConfig.timeSystem,
     ));
+  }
+
+  function enterVillage() {
+    if (
+      !life?.battle
+      || life.battle.outcome === "defeat"
+      || life.adventure
+      || life.deathState
+      || lifeExpired
+    ) return;
+    persistLife(startVillageAdventure(life, eventConfig, eventEngineConfig));
   }
 
   function prepareEventItem(itemId: string) {
@@ -1858,6 +1858,12 @@ export default function Home() {
                       <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.battle.summary}</p>
                       <p className="mt-2 text-sm text-[#d4b875]">{life.battle.reward}</p>
                     </div>
+                    {life.battle.outcome !== "defeat" && (
+                      <Button onClick={enterVillage} className="mt-4 w-full bg-[#d6b66d] text-[#102019] hover:bg-[#e7cc8b]">
+                        {prologueConfig.trial.continueButton}
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">

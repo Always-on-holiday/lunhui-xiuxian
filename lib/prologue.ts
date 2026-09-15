@@ -138,6 +138,7 @@ type TrialRules = {
   riskText: string;
   startButton: string;
   retryButton: string;
+  continueButton: string;
   completionText: string;
   windowTitle: string;
   windowBadge: string;
