@@ -152,6 +152,11 @@ if (-not (Test-CompatibleNode -Candidate $nodePath)) {
     Stop-Launcher -Message "没有找到启动游戏所需的运行环境。"
 }
 
+# pnpm 的生命周期脚本（例如 esbuild 安装）会从 PATH 查找 node。
+# 始终把已经验证过版本的 Node 放在最前面，避免误用旧版本。
+$nodeDirectory = Split-Path -Parent $nodePath
+$env:PATH = "$nodeDirectory;$env:PATH"
+
 $wranglerPath = Join-Path $projectDir "node_modules\wrangler\bin\wrangler.js"
 $configPath = Join-Path $projectDir "dist\server\wrangler.json"
 $builtWorkerPath = Join-Path $projectDir "dist\server\index.js"
