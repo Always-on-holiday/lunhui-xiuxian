@@ -82,6 +82,21 @@ function Test-CompatibleBundledPnpm {
     }
 }
 
+function Get-Sha256Hex {
+    param([string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($hashBytes)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 $projectDir = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($DependenciesRoot)) {
     $DependenciesRoot = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies"
@@ -123,7 +138,7 @@ if (-not (Test-CompatibleNode -Candidate $nodePath)) {
                     -Uri "https://nodejs.org/dist/v$nodeVersion/$nodeArchiveName" `
                     -OutFile $archivePath
 
-                $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $actualHash = Get-Sha256Hex -Path $archivePath
                 if ($actualHash -ne $nodeArchiveHash) {
                     throw "下载的 Node.js 文件校验失败。"
                 }
