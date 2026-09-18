@@ -45,7 +45,3 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
-/packaging/windows-launcher/Payload.zip
-/packaging/windows-launcher/bin/
-/packaging/windows-launcher/obj/
-/release/

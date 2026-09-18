@@ -147,7 +147,6 @@ type ModelContext = {
 const SESSION_KEY = "lunhui-xiuxian-session";
 const LIFE_KEY = "lunhui-xiuxian-prologue-v1";
 const PAST_LIVES_KEY = "lunhui-xiuxian-past-lives-v1";
-const PUBLIC_ORIGIN_KEY = "lunhui-xiuxian-public-origin";
 
 const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
   { key: "attack", label: "攻击" },
@@ -397,21 +396,8 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const query = new URLSearchParams(window.location.search);
-      const queryCode = query.get("room");
+      const queryCode = new URLSearchParams(window.location.search).get("room");
       if (queryCode) setRoomCode(queryCode.toUpperCase().slice(0, 6));
-      const publicOrigin = query.get("publicOrigin");
-      sessionStorage.removeItem(PUBLIC_ORIGIN_KEY);
-      if (publicOrigin) {
-        try {
-          const url = new URL(publicOrigin);
-          if (url.protocol === "https:" && url.hostname.endsWith(".trycloudflare.com")) {
-            sessionStorage.setItem(PUBLIC_ORIGIN_KEY, url.origin);
-          }
-        } catch {
-          // Ignore invalid launcher URLs.
-        }
-      }
       const saved = localStorage.getItem(SESSION_KEY);
       if (!saved) return;
       try {
@@ -578,8 +564,7 @@ export default function Home() {
 
   async function copyInvite() {
     if (!session) return;
-    const publicOrigin = sessionStorage.getItem(PUBLIC_ORIGIN_KEY);
-    const invite = `${publicOrigin ?? window.location.origin}/?room=${session.code}`;
+    const invite = `${window.location.origin}/?room=${session.code}`;
     await navigator.clipboard.writeText(invite);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
