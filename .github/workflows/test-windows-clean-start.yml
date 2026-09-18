@@ -124,10 +124,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "世界存档迁移失败。" }
 
           $serverArguments = @(
-            "--import", (Join-Path $PWD "scripts/sites-env.mjs"),
-            $wrangler,
+            "--import", "./scripts/sites-env.mjs",
+            "./node_modules/wrangler/bin/wrangler.js",
             "dev",
-            "--config", (Join-Path $PWD "dist/server/wrangler.json"),
+            "--config", "dist/server/wrangler.json",
             "--local",
             "--persist-to", $save,
             "--ip", "127.0.0.1",
