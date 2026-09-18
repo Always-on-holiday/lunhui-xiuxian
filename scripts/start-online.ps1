@@ -40,7 +40,7 @@ function Test-CompatibleNode {
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($reportedVersion)) {
             return $false
         }
-        return ([version]$reportedVersion.Trim() -ge [version]"22.13.0")
+        return ([version]$reportedVersion.Trim() -ge [version]"22.23.2")
     }
     catch {
         return $false
@@ -97,6 +97,20 @@ function Get-Sha256Hex {
     }
 }
 
+$launcherMutex = [System.Threading.Mutex]::new($false, "Local\LunhuiXiuxianLauncher")
+try {
+    $ownsLauncherMutex = $launcherMutex.WaitOne(0)
+}
+catch [System.Threading.AbandonedMutexException] {
+    $ownsLauncherMutex = $true
+}
+
+if (-not $ownsLauncherMutex) {
+    Stop-Launcher `
+        -Message "已有一个游戏启动窗口正在运行。" `
+        -Hint "请使用原来的窗口；若它刚关闭，请等待几秒后重试。"
+}
+
 $projectDir = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($DependenciesRoot)) {
     $DependenciesRoot = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies"
@@ -110,10 +124,10 @@ if (-not (Test-CompatibleNode -Candidate $nodePath)) {
         $nodePath = $systemNode.Source
     }
     else {
-        $nodeVersion = "22.13.0"
+        $nodeVersion = "22.23.2"
         $nodeFolderName = "node-v$nodeVersion-win-x64"
         $nodeArchiveName = "$nodeFolderName.zip"
-        $nodeArchiveHash = "b0feb09ebf41328628e7383f7a092fb7342ce1e05c867a90cf8f1379205a8429"
+        $nodeArchiveHash = "1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97"
         $portableRoot = Join-Path $env:LOCALAPPDATA "轮回仙途\开发运行时"
         $portableNodeRoot = Join-Path $portableRoot $nodeFolderName
         $nodePath = Join-Path $portableNodeRoot "node.exe"
@@ -179,6 +193,9 @@ $frameworkScriptPath = Join-Path $projectDir "scripts\run-framework.mjs"
 $saveConfigPath = Join-Path $projectDir "wrangler.save.json"
 $packagePath = Join-Path $projectDir "package.json"
 $lockfilePath = Join-Path $projectDir "pnpm-lock.yaml"
+$workspaceConfigPath = Join-Path $projectDir "pnpm-workspace.yaml"
+$npmConfigPath = Join-Path $projectDir ".npmrc"
+$installStatePath = Join-Path $projectDir "node_modules\.lunhui-install-state"
 $projectRoot = Split-Path -Parent $projectDir
 $saveRoot = Join-Path $projectRoot "世界存档"
 $activeWorldPath = Join-Path $saveRoot "默认世界"
@@ -190,14 +207,44 @@ if (
     -not (Test-Path -LiteralPath $frameworkScriptPath) -or
     -not (Test-Path -LiteralPath $saveConfigPath) -or
     -not (Test-Path -LiteralPath $packagePath) -or
-    -not (Test-Path -LiteralPath $lockfilePath)
+    -not (Test-Path -LiteralPath $lockfilePath) -or
+    -not (Test-Path -LiteralPath $workspaceConfigPath) -or
+    -not (Test-Path -LiteralPath $npmConfigPath)
 ) {
     Stop-Launcher `
         -Message "没有找到完整的游戏文件。" `
         -Hint "请在 GitHub Desktop 中重新获取项目后再试。"
 }
 
-if (-not (Test-Path -LiteralPath $wranglerPath)) {
+$activeNodeVersion = (& $nodePath -p "process.versions.node" | Select-Object -Last 1).Trim()
+$packageHash = Get-Sha256Hex -Path $packagePath
+$lockfileHash = Get-Sha256Hex -Path $lockfilePath
+$workspaceConfigHash = Get-Sha256Hex -Path $workspaceConfigPath
+$npmConfigHash = Get-Sha256Hex -Path $npmConfigPath
+$expectedInstallState = @(
+    "node=$activeNodeVersion"
+    "pnpm=11.19.0"
+    "package=$packageHash"
+    "lock=$lockfileHash"
+    "workspace=$workspaceConfigHash"
+    "npmrc=$npmConfigHash"
+) -join "`n"
+$actualInstallState = if (Test-Path -LiteralPath $installStatePath) {
+    [System.IO.File]::ReadAllText($installStatePath)
+}
+else {
+    ""
+}
+$needsDependencyInstall = -not (Test-Path -LiteralPath $wranglerPath) -or
+    $actualInstallState -ne $expectedInstallState
+
+if ($needsDependencyInstall) {
+    # 旧标记只能代表上一次完整安装。重装一开始就使它失效，
+    # 这样即使本次在中途失败，下次启动仍会继续修复依赖。
+    if (Test-Path -LiteralPath $installStatePath) {
+        Remove-Item -LiteralPath $installStatePath -Force
+    }
+
     Write-Host "首次启动，正在自动安装游戏运行文件……" -ForegroundColor Yellow
     Write-Host "这一步只需执行一次，可能需要几分钟。"
 
@@ -294,6 +341,20 @@ if (-not (Test-Path -LiteralPath $wranglerPath)) {
             -Hint "请检查网络后重试；若仍失败，请把这个窗口截图发给开发者。"
     }
 
+    $installStateTempPath = "$installStatePath.tmp-$PID"
+    try {
+        [System.IO.File]::WriteAllText(
+            $installStateTempPath,
+            $expectedInstallState,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        Move-Item -LiteralPath $installStateTempPath -Destination $installStatePath -Force
+    }
+    finally {
+        if (Test-Path -LiteralPath $installStateTempPath) {
+            Remove-Item -LiteralPath $installStateTempPath -Force -ErrorAction SilentlyContinue
+        }
+    }
     Write-Host "游戏运行文件安装完成。" -ForegroundColor Green
 }
 
@@ -302,8 +363,16 @@ if ($InstallDependenciesOnly) {
     exit 0
 }
 
-$existingServer = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
-if ($existingServer) {
+try {
+    $existingServer = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() |
+        Where-Object { $_.Port -eq 8787 } |
+        Select-Object -First 1
+}
+catch {
+    $existingServer = $null
+}
+
+if ($null -ne $existingServer) {
     Write-Host "已有一个游戏服务器正在运行。" -ForegroundColor Yellow
     Write-Host "请使用已经打开的游戏页面，或先关闭旧的黑色窗口。"
     Pause-BeforeExit
@@ -316,7 +385,9 @@ $buildInputs = @(
     (Join-Path $projectDir "next.config.ts"),
     (Join-Path $projectDir "vite.config.ts"),
     (Join-Path $projectDir "package.json"),
-    (Join-Path $projectDir "pnpm-lock.yaml")
+    (Join-Path $projectDir "pnpm-lock.yaml"),
+    (Join-Path $projectDir "pnpm-workspace.yaml"),
+    (Join-Path $projectDir ".npmrc")
 )
 $latestSourceChange = $buildInputs |
     Where-Object { Test-Path -LiteralPath $_ } |
@@ -496,7 +567,9 @@ $arguments = @(
 $tunnelOpened = $false
 
 try {
-    & $nodePath @arguments 2>&1 | ForEach-Object {
+    # Wrangler 的正常警告会写到 stderr。不要把 stderr 合并进 PowerShell
+    # 的错误管道；只分析 stdout 中的公网网址。
+    & $nodePath @arguments | ForEach-Object {
         $line = $_.ToString()
         Write-Host $line
 

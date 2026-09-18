@@ -3,19 +3,7 @@ name: Windows 干净环境启动检查
 on:
   workflow_dispatch:
   push:
-    paths:
-      - "scripts/start-online.ps1"
-      - "一键启动互联网联机.bat"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/test-windows-clean-start.yml"
   pull_request:
-    paths:
-      - "scripts/start-online.ps1"
-      - "一键启动互联网联机.bat"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/test-windows-clean-start.yml"
 
 jobs:
   codex-runtime-without-pnpm-on-path:
@@ -28,21 +16,25 @@ jobs:
       - name: 准备与用户电脑相同的 Codex 运行目录
         uses: actions/setup-node@v7
         with:
-          node-version: 22.13.0
+          node-version: 22.23.2
           package-manager-cache: false
 
       - name: 验证内置 pnpm 不在 PATH 时仍可安装
         shell: pwsh
         run: |
-          $dependenciesRoot = Join-Path $env:RUNNER_TEMP "codex-dependencies"
+          $cleanProfile = Join-Path $env:RUNNER_TEMP "codex-user"
+          $dependenciesRoot = Join-Path $cleanProfile ".cache/codex-runtimes/codex-primary-runtime/dependencies"
           $nodeRoot = Join-Path $dependenciesRoot "node"
           $nodeBin = Join-Path $nodeRoot "bin"
-          New-Item -ItemType Directory -Force -Path $nodeBin | Out-Null
+          $nativeRoot = Join-Path $dependenciesRoot "native"
+          New-Item -ItemType Directory -Force -Path $nodeBin, $nativeRoot | Out-Null
           Copy-Item (Get-Command node).Source (Join-Path $nodeBin "node.exe")
           npm install --prefix $nodeRoot pnpm@11.19.0 --no-audit --no-fund
+          New-Item -ItemType Junction -Path (Join-Path $nativeRoot "powershell") -Target $PSHOME | Out-Null
 
+          $env:USERPROFILE = $cleanProfile
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
-          cmd.exe /d /c "`"$PWD\一键启动互联网联机.bat`" -DependenciesRoot `"$dependenciesRoot`" -InstallDependenciesOnly -NoPause"
+          cmd.exe /d /c "`"$PWD\一键启动互联网联机.bat`" -InstallDependenciesOnly -NoPause"
           if ($LASTEXITCODE -ne 0) {
             throw "启动器没有找到 Codex 内置的 pnpm。"
           }
@@ -81,7 +73,7 @@ jobs:
             throw "一键启动器未能在干净 Windows 环境中自动准备依赖。"
           }
 
-          $node = Join-Path $cleanLocalAppData "轮回仙途/开发运行时/node-v22.13.0-win-x64/node.exe"
+          $node = Join-Path $cleanLocalAppData "轮回仙途/开发运行时/node-v22.23.2-win-x64/node.exe"
           $wrangler = Join-Path $PWD "node_modules/wrangler/bin/wrangler.js"
           if (-not (Test-Path -LiteralPath $node)) {
             throw "没有生成游戏专用 Node.js。"
@@ -90,15 +82,15 @@ jobs:
             throw "没有安装 Wrangler。"
           }
 
-          & $node --version
-          if ($LASTEXITCODE -ne 0) {
-            throw "游戏专用 Node.js 无法运行。"
+          $nodeVersion = & $node --version
+          if ($LASTEXITCODE -ne 0 -or $nodeVersion.Trim() -ne "v22.23.2") {
+            throw "游戏专用 Node.js 版本不正确：$nodeVersion"
           }
 
       - name: 检查并构建网页
         shell: pwsh
         run: |
-          $node = Join-Path $env:RUNNER_TEMP "clean-user/AppData/Local/轮回仙途/开发运行时/node-v22.13.0-win-x64/node.exe"
+          $node = Join-Path $env:RUNNER_TEMP "clean-user/AppData/Local/轮回仙途/开发运行时/node-v22.23.2-win-x64/node.exe"
           & $node scripts/validate-content.mjs
           if ($LASTEXITCODE -ne 0) { throw "内容检查失败。" }
 
@@ -112,7 +104,7 @@ jobs:
       - name: 启动真实服务器并访问游戏页
         shell: pwsh
         run: |
-          $node = Join-Path $env:RUNNER_TEMP "clean-user/AppData/Local/轮回仙途/开发运行时/node-v22.13.0-win-x64/node.exe"
+          $node = Join-Path $env:RUNNER_TEMP "clean-user/AppData/Local/轮回仙途/开发运行时/node-v22.23.2-win-x64/node.exe"
           $wrangler = Join-Path $PWD "node_modules/wrangler/bin/wrangler.js"
           $save = Join-Path $env:RUNNER_TEMP "smoke-world"
           $serverOut = Join-Path $env:RUNNER_TEMP "game-server.out.log"
@@ -131,7 +123,7 @@ jobs:
             "--local",
             "--persist-to", $save,
             "--ip", "127.0.0.1",
-            "--port", "8787",
+            "--port", "8790",
             "--inspector-port", "0"
           )
           $server = Start-Process `
@@ -147,8 +139,12 @@ jobs:
             for ($attempt = 0; $attempt -lt 90; $attempt++) {
               if ($server.HasExited) { break }
               try {
-                $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8787/" -TimeoutSec 2
-                if ($response.StatusCode -eq 200 -and $response.Content.Length -gt 100) {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8790/" -TimeoutSec 2
+                if (
+                  $response.StatusCode -eq 200 -and
+                  $response.Content.Length -gt 100 -and
+                  $response.Content -match "轮回仙途"
+                ) {
                   $ready = $true
                   break
                 }
@@ -168,4 +164,55 @@ jobs:
             if (Test-Path $serverOut) { Get-Content $serverOut }
             if (Test-Path $serverErr) { Get-Content $serverErr }
             throw "游戏服务器没有返回可用页面。"
+          }
+
+      - name: 用 Windows PowerShell 5.1 跑完整启动器流程
+        shell: pwsh
+        run: |
+          $cleanProfile = Join-Path $env:RUNNER_TEMP "clean-user"
+          $cleanLocalAppData = Join-Path $cleanProfile "AppData/Local"
+          $wrangler = Join-Path $PWD "node_modules/wrangler/bin/wrangler.js"
+          $fakeWrangler = @'
+          const args = process.argv.slice(2);
+          if (args.includes("dev")) {
+            const required = ["--tunnel", "--persist-to", "--config", "--ip", "127.0.0.1", "--inspector-port", "0"];
+            const persistIndex = args.indexOf("--persist-to");
+            const persistPath = persistIndex >= 0 ? args[persistIndex + 1] ?? "" : "";
+            const hasRequiredArguments = required.every((argument) => args.includes(argument));
+            const hasRealisticSavePath = persistPath.includes("世界存档") && persistPath.includes("默认世界") && /\s/.test(persistPath);
+            if (!hasRequiredArguments || !hasRealisticSavePath) {
+              process.stderr.write(`fixture invalid launcher arguments: ${JSON.stringify(args)}\n`);
+              process.exit(91);
+            }
+            process.stderr.write("fixture tunnel warning on stderr\n");
+            process.stdout.write("fixture server stopped cleanly\n");
+          }
+          process.exit(0);
+          '@
+          [System.IO.File]::WriteAllText($wrangler, $fakeWrangler, [System.Text.UTF8Encoding]::new($false))
+
+          $projectParent = Join-Path $env:RUNNER_TEMP "玩家 游戏"
+          $projectJunction = Join-Path $projectParent "轮回仙途"
+          New-Item -ItemType Directory -Force -Path $projectParent | Out-Null
+          New-Item -ItemType Junction -Path $projectJunction -Target $PWD | Out-Null
+
+          $futureTimestamp = [DateTime]::UtcNow.AddMinutes(5)
+          (Get-Item "dist/server/wrangler.json").LastWriteTimeUtc = $futureTimestamp
+          (Get-Item "dist/server/index.js").LastWriteTimeUtc = $futureTimestamp
+
+          $env:USERPROFILE = $cleanProfile
+          $env:LOCALAPPDATA = $cleanLocalAppData
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
+          $env:PSModulePath = ""
+
+          $batchPath = Join-Path $projectJunction "一键启动互联网联机.bat"
+          $launcherOutput = cmd.exe /d /c "`"$batchPath`" -NoPause" 2>&1
+          $launcherExitCode = $LASTEXITCODE
+          $launcherOutput | ForEach-Object { Write-Host $_ }
+
+          if ($launcherExitCode -ne 0) {
+            throw "Windows PowerShell 5.1 完整启动器流程失败。"
+          }
+          if (($launcherOutput -join "`n") -notmatch "fixture tunnel warning on stderr") {
+            throw "启动器没有正确处理 Wrangler 的 stderr 警告。"
           }
