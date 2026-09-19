@@ -15,4 +15,4 @@ if not defined LAUNCHER (
   exit /b 1
 )
 
-"%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%LAUNCHER%"
+"%PWSH%" -NoProfile -ExecutionPolicy Bypass -File "%LAUNCHER%" %*
