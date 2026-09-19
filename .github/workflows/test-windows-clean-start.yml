@@ -19,6 +19,10 @@ jobs:
           node-version: 22.23.2
           package-manager-cache: false
 
+      - name: 验证拆分后的启动器模块
+        shell: pwsh
+        run: ./scripts/tests/test-launcher-modules.ps1 -NodePath (Get-Command node).Source
+
       - name: 验证内置 pnpm 不在 PATH 时仍可安装
         shell: pwsh
         run: |

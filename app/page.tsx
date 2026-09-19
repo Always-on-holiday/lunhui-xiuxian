@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Archive, ChevronDown, Copy, Dices, Ghost, Globe2, Heart, Hourglass, LogOut, MousePointer2, ScrollText, Shield, Sparkles, Swords, Trash2, Users, Zap } from "lucide-react";
+import { Archive, ChevronDown, Dices, Ghost, MousePointer2, ScrollText, Sparkles, Swords, Trash2, Users } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,23 +14,32 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventScene } from "@/components/event-scene";
-import { EventJudgement } from "@/components/event-judgement";
 import { BirthFlow } from "@/components/birth-flow";
 import { CycleSecretScene, InheritanceScene, SoulScene } from "@/components/reincarnation-scenes";
+import { LandingScreen } from "@/components/game/landing-screen";
+import { CharacterPanel } from "@/components/game/character-panel";
+import { JudgementPanel } from "@/components/game/judgement-panel";
+import { InventoryPanel } from "@/components/game/inventory-panel";
+import { CompanionsPanel } from "@/components/game/companions-panel";
+import { SidebarNavigation, type SidebarView } from "@/components/game/sidebar-navigation";
+import { WorldHeader } from "@/components/game/world-header";
+import { useGameContent } from "@/hooks/use-game-content";
+import { useMultiplayerRoom } from "@/hooks/use-multiplayer-room";
+import { useLocalLife } from "@/hooks/use-local-life";
+import { useFreeActions, type FreeActionNotice } from "@/hooks/use-free-actions";
+import {
+  ITEM_ACTION_ORDER,
+  PLAYER_ACTION_ORDER,
+  STAT_NAME,
+  type ActionSelection,
+} from "@/lib/client/action-selection";
 import {
   continueVillageAdventure,
   currentRandomEvent,
-  isEventEngineConfig,
-  isEventLibraryConfig,
   resolveEventChoice,
   startVillageAdventure,
   toggleEventItem,
-  type EventEngineConfig,
-  type EventLibraryConfig,
 } from "@/lib/events";
 import {
   canTriggerSideQuest,
@@ -40,212 +49,77 @@ import {
   currentBirthStep,
   finalizeBirthStats,
   type FiveStats,
-  isPrologueConfig,
   itemWorksInContext,
-  type InventoryItem,
-  type PrologueConfig,
-  type PrologueLife,
   resolveWoodenTrial,
   rollBirth,
   toggleTrialItem,
   triggerSideQuest,
 } from "@/lib/prologue";
+import { previewFreeAction } from "@/lib/free-actions";
 import {
-  freeActionActorFromLife,
-  isFreeActionConfig,
-  prepareFreeAction,
-  previewFreeAction,
-  resolveFreeAction,
-  type FreeActionConfig,
-  type FreeActionContext,
-  type FreeActionTarget,
-} from "@/lib/free-actions";
-import {
-  formatWorldDate,
-  formatYearsAndDays,
   isLifeExpired,
-  normalizeLifeTimeline,
   renewLifeAfterRevival,
   spendLifeTime,
-  tickLifeTime,
 } from "@/lib/longevity";
 import {
   applyPendingSpiritLoss,
   completeCycleSecret,
   enterSoulState,
-  isReincarnationConfig,
   isSoulExpired,
   recordSoulAction,
   resolveCycleSecret,
   reviveLife,
   shouldShowCycleSecret,
   type LifeInheritance,
-  type ReincarnationConfig,
   type RevivalMethodConfig,
   type SoulActionConfig,
 } from "@/lib/reincarnation";
-import defaultContent from "@/public/游戏内容/界面文字.json";
-import defaultPrologueConfig from "@/public/游戏内容/序章规则.json";
-import defaultEventConfig from "@/public/游戏内容/随机事件/01-新手村.json";
-import defaultEventEngineConfig from "@/public/游戏内容/随机事件/阶段列表.json";
-import defaultReincarnationConfig from "@/public/游戏内容/轮回规则.json";
-import defaultFreeActionConfig from "@/public/游戏内容/自由行动/自由行动规则.json";
-
-type Player = {
-  id: string;
-  name: string;
-  isHost: boolean;
-  joinedAt: string;
-  lifeStatus: "alive" | "soul" | "rebirth";
-  deathDay: number | null;
-  reviveDeadlineDay: number | null;
-  soulPower: number;
-  lastSoulActionDay: number | null;
-  pendingSpiritLoss: number;
-  realm: string | null;
-  level: number;
-  currentSpirit: number;
-  maxSpirit: number;
-};
-
-type Room = {
-  code: string;
-  pvpEnabled: boolean;
-  createdAt: string;
-  worldDay: number;
-  cycle: number;
-  players: Player[];
-};
-
-type Session = {
-  code: string;
-  playerId: string;
-  name: string;
-};
-
-type PastLifeArchiveEntry = {
-  id: string;
-  archivedAt: string;
-  playerName: string;
-  roomCode: string;
-  life: PrologueLife;
-};
-
-type ToolRegistration = {
-  name: string;
-  title: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  annotations?: { readOnlyHint?: boolean; untrustedContentHint?: boolean };
-  execute(input: unknown): Promise<unknown>;
-};
-
-type ModelContext = {
-  registerTool(tool: ToolRegistration, options?: { signal?: AbortSignal }): void | Promise<void>;
-};
-
-const SESSION_KEY = "lunhui-xiuxian-session";
-const LIFE_KEY = "lunhui-xiuxian-prologue-v1";
-const PAST_LIVES_KEY = "lunhui-xiuxian-past-lives-v1";
-
-const STAT_LABELS: Array<{ key: keyof FiveStats; label: string }> = [
-  { key: "attack", label: "攻击" },
-  { key: "defense", label: "防御" },
-  { key: "speed", label: "速度" },
-  { key: "intelligence", label: "智力" },
-  { key: "proficiency", label: "熟练" },
-];
-
-const STAT_NAME = Object.fromEntries(STAT_LABELS.map((entry) => [entry.key, entry.label])) as Record<keyof FiveStats, string>;
-const HOSTILE_ACTIONS = new Set(["threaten", "steal", "rob", "attack", "kill", "infringe"]);
-const ITEM_ACTION_ORDER = ["inspect_item", "use_item", "eat_item", "equip_item", "combine_item", "give_item", "destroy_item", "discard_item"];
-const PLAYER_ACTION_ORDER = ["observe", "talk", "trade", "help", "threaten", "steal", "rob", "attack", "kill", "infringe", "leave"];
-const FREE_ACTION_OUTCOME_LABELS = {
-  criticalSuccess: "大成",
-  success: "成功",
-  failure: "失败",
-  criticalFailure: "惨败",
-} as const;
-
-type ActionSelection = {
-  key: string;
-  target: FreeActionTarget;
-  sourceItemId?: string;
-  sourcePlayerId?: string;
-  recommendedActions?: string[];
-  extraActions?: string[];
-};
-
-function itemTags(item: InventoryItem) {
-  const text = `${item.name} ${item.category} ${item.description}`;
-  const tags = new Set<string>(item.tags ?? []);
-  if (/食|粮|肉|果|饼|汤/.test(text)) tags.add("food");
-  if (/丹|药|草|灵植/.test(text)) tags.add("herb");
-  if (/毒|腐|瘴/.test(text)) tags.add("toxic");
-  if (/矿|石|铁|玉/.test(text)) tags.add("mineral");
-  if (/剑|刀|枪|弓|武器|兵刃/.test(text)) tags.add("weapon");
-  if (/甲|衣|袍|盾|护具/.test(text)) tags.add("armor");
-  if (/符|印|令/.test(text)) tags.add("talisman");
-  if (/戒|佩|坠|饰/.test(text)) tags.add("accessory");
-  if (/信|钥|任务|凭证/.test(text)) tags.add("quest_key");
-  return [...tags];
-}
-
-type UiContent = typeof defaultContent;
-
-function mergeContent(value: unknown): UiContent {
-  if (!value || typeof value !== "object") return defaultContent;
-  const candidate = value as Partial<UiContent>;
-  return {
-    ...defaultContent,
-    ...candidate,
-    meta: { ...defaultContent.meta, ...candidate.meta },
-    brand: { ...defaultContent.brand, ...candidate.brand },
-    landing: {
-      ...defaultContent.landing,
-      ...candidate.landing,
-      highlights: Array.isArray(candidate.landing?.highlights)
-        ? candidate.landing.highlights
-        : defaultContent.landing.highlights,
-    },
-    world: {
-      ...defaultContent.world,
-      ...candidate.world,
-      storyParagraphs: Array.isArray(candidate.world?.storyParagraphs)
-        ? candidate.world.storyParagraphs
-        : defaultContent.world.storyParagraphs,
-    },
-  };
-}
-
-async function readJson(response: Response) {
-  const data = await response.json() as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "请求失败。");
-  return data;
-}
 
 export default function Home() {
-  const [content, setContent] = useState<UiContent>(defaultContent);
-  const [prologueConfig, setPrologueConfig] = useState<PrologueConfig>(defaultPrologueConfig as PrologueConfig);
-  const [eventConfig, setEventConfig] = useState<EventLibraryConfig>(defaultEventConfig as unknown as EventLibraryConfig);
-  const [eventEngineConfig, setEventEngineConfig] = useState<EventEngineConfig>(defaultEventEngineConfig as unknown as EventEngineConfig);
-  const [reincarnationConfig, setReincarnationConfig] = useState<ReincarnationConfig>(defaultReincarnationConfig as ReincarnationConfig);
-  const [freeActionConfig, setFreeActionConfig] = useState<FreeActionConfig>(defaultFreeActionConfig as unknown as FreeActionConfig);
-  const [name, setName] = useState("");
-  const [roomCode, setRoomCode] = useState("");
-  const [pvpEnabled, setPvpEnabled] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
-  const [room, setRoom] = useState<Room | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [life, setLife] = useState<PrologueLife | null>(null);
-  const [pastLives, setPastLives] = useState<PastLifeArchiveEntry[]>([]);
+  const {
+    content,
+    prologueConfig,
+    eventConfig,
+    eventEngineConfig,
+    reincarnationConfig,
+    freeActionConfig,
+  } = useGameContent();
+  const {
+    name,
+    setName,
+    roomCode,
+    setRoomCode,
+    pvpEnabled,
+    setPvpEnabled,
+    session,
+    room,
+    setRoom,
+    busy,
+    error,
+    setError,
+    copied,
+    createRoom,
+    joinRoom,
+    performRoomAction,
+    copyInvite,
+    clearSession,
+  } = useMultiplayerRoom();
   const [itemNotice, setItemNotice] = useState("");
+  const {
+    life,
+    pastLives,
+    persistLife,
+    archiveCurrentLife,
+    resetAllLives,
+  } = useLocalLife({
+    session,
+    timeSystem: prologueConfig.timeSystem,
+    setNotice: setItemNotice,
+  });
   const [lifeActionBusy, setLifeActionBusy] = useState(false);
   const [activeActionTarget, setActiveActionTarget] = useState<string | null>(null);
-  const [freeActionNotice, setFreeActionNotice] = useState<{ targetKey: string; text: string; danger: boolean } | null>(null);
-  const [sidebarView, setSidebarView] = useState<"character" | "assets" | "companions">("character");
+  const [freeActionNotice, setFreeActionNotice] = useState<FreeActionNotice | null>(null);
+  const [sidebarView, setSidebarView] = useState<SidebarView>("character");
   const [pendingEventChoice, setPendingEventChoice] = useState<{ drawId: string; choiceId: string } | null>(null);
   const [eventDiceRolling, setEventDiceRolling] = useState(false);
   const [eventResolutionReady, setEventResolutionReady] = useState(true);
@@ -261,288 +135,6 @@ export default function Home() {
   const remainingLifePercent = life?.timeline && life.timeline.lifespanDays > 0
     ? Math.max(0, Math.min(100, remainingLifeDays! / life.timeline.lifespanDays * 100))
     : 0;
-
-  useEffect(() => {
-    void fetch(`/游戏内容/界面文字.json?v=${Date.now()}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("内容配置读取失败");
-        return response.json();
-      })
-      .then((value: unknown) => {
-        const nextContent = mergeContent(value);
-        setContent(nextContent);
-        document.title = nextContent.meta.title;
-        const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-        if (description) description.content = nextContent.meta.description;
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    void fetch(`/游戏内容/轮回规则.json?v=${Date.now()}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("轮回规则读取失败");
-        return response.json();
-      })
-      .then((value: unknown) => {
-        if (isReincarnationConfig(value)) setReincarnationConfig(value);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    void fetch(`/游戏内容/自由行动/自由行动规则.json?v=${Date.now()}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("自由行动规则读取失败");
-        return response.json();
-      })
-      .then((value: unknown) => {
-        if (isFreeActionConfig(value)) setFreeActionConfig(value);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    void fetch(`/游戏内容/序章规则.json?v=${Date.now()}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("序章规则读取失败");
-        return response.json();
-      })
-      .then((value: unknown) => {
-        if (isPrologueConfig(value)) setPrologueConfig(value);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    void Promise.all([
-      fetch(`/游戏内容/随机事件/01-新手村.json?v=${Date.now()}`, { cache: "no-store" }).then((response) => {
-        if (!response.ok) throw new Error("新手村事件读取失败");
-        return response.json();
-      }),
-      fetch(`/游戏内容/随机事件/阶段列表.json?v=${Date.now()}`, { cache: "no-store" }).then((response) => {
-        if (!response.ok) throw new Error("事件引擎规则读取失败");
-        return response.json();
-      }),
-    ]).then(([library, engine]: unknown[]) => {
-      if (isEventLibraryConfig(library)) setEventConfig(library);
-      if (isEventEngineConfig(engine)) setEventEngineConfig(engine);
-    }).catch(() => undefined);
-  }, []);
-
-  const enterSession = useCallback((next: Session) => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-    setSession(next);
-    setName(next.name);
-    setRoomCode(next.code);
-    window.history.replaceState(null, "", `?room=${next.code}`);
-  }, []);
-
-  const refreshRoom = useCallback(async (code?: string) => {
-    const target = code ?? session?.code;
-    if (!target) return null;
-    const response = await fetch(`/api/rooms/${target}`, { cache: "no-store" });
-    const data = await readJson(response) as unknown as { room: Room };
-    setRoom(data.room);
-    return data.room;
-  }, [session?.code]);
-
-  const createRoom = useCallback(async (creatorName: string, pvp: boolean) => {
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: creatorName, pvpEnabled: pvp }),
-      });
-      const data = await readJson(response) as { code: string; playerId: string };
-      const next = { code: data.code, playerId: data.playerId, name: creatorName.trim() };
-      enterSession(next);
-      await refreshRoom(data.code);
-      return { code: data.code, pvpEnabled: pvp };
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "开辟世界失败。";
-      setError(message);
-      throw caught;
-    } finally {
-      setBusy(false);
-    }
-  }, [enterSession, refreshRoom]);
-
-  const joinRoom = useCallback(async (joinName: string, codeInput: string) => {
-    const code = codeInput.trim().toUpperCase();
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/rooms/${code}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: joinName }),
-      });
-      const data = await readJson(response) as { code: string; playerId: string };
-      const next = { code: data.code, playerId: data.playerId, name: joinName.trim() };
-      enterSession(next);
-      await refreshRoom(data.code);
-      return { code: data.code, joined: true };
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "进入世界失败。";
-      setError(message);
-      throw caught;
-    } finally {
-      setBusy(false);
-    }
-  }, [enterSession, refreshRoom]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const queryCode = new URLSearchParams(window.location.search).get("room");
-      if (queryCode) setRoomCode(queryCode.toUpperCase().slice(0, 6));
-      const saved = localStorage.getItem(SESSION_KEY);
-      if (!saved) return;
-      try {
-        const restored = JSON.parse(saved) as Session;
-        if (restored.code && restored.playerId && restored.name) {
-          setSession(restored);
-          setName(restored.name);
-          setRoomCode(restored.code);
-        }
-      } catch {
-        localStorage.removeItem(SESSION_KEY);
-      }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    const initialTimer = window.setTimeout(() => {
-      void refreshRoom().catch((caught) => {
-        setError(caught instanceof Error ? caught.message : "世界暂时失去回应。");
-      });
-    }, 0);
-    const timer = window.setInterval(() => {
-      void refreshRoom().catch(() => undefined);
-    }, 4000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(timer);
-    };
-  }, [refreshRoom, session]);
-
-  useEffect(() => {
-    let restored: PrologueLife | null = null;
-    let restoredPastLives: PastLifeArchiveEntry[] = [];
-    if (!session) {
-      const timer = window.setTimeout(() => {
-        setLife(null);
-        setPastLives([]);
-      }, 0);
-      return () => window.clearTimeout(timer);
-    }
-    const saved = localStorage.getItem(`${LIFE_KEY}:${session.playerId}`);
-    if (saved) {
-      try {
-        const candidate = JSON.parse(saved) as PrologueLife;
-        restored = candidate.version === 1
-          ? normalizeLifeTimeline(candidate, prologueConfig.timeSystem)
-          : null;
-      } catch {
-        localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
-      }
-    }
-    const archived = localStorage.getItem(`${PAST_LIVES_KEY}:${session.playerId}`);
-    if (archived) {
-      try {
-        const candidate = JSON.parse(archived) as unknown;
-        restoredPastLives = Array.isArray(candidate)
-          ? candidate.filter((entry): entry is PastLifeArchiveEntry => Boolean(
-              entry
-                && typeof entry === "object"
-                && "id" in entry
-                && "archivedAt" in entry
-                && "life" in entry,
-            ))
-          : [];
-      } catch {
-        localStorage.removeItem(`${PAST_LIVES_KEY}:${session.playerId}`);
-      }
-    }
-    const timer = window.setTimeout(() => {
-      setLife(restored);
-      setPastLives(restoredPastLives);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [prologueConfig.timeSystem, session]);
-
-  useEffect(() => {
-    if (!session) return;
-    const timer = window.setInterval(() => {
-      setLife((current) => {
-        if (!current || current.deathState) return current;
-        const next = tickLifeTime(current, prologueConfig.timeSystem);
-        if (next === current) return current;
-        localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(next));
-        return next;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [prologueConfig.timeSystem, session]);
-
-  useEffect(() => {
-    const modelContext = (document as Document & { modelContext?: ModelContext }).modelContext;
-    if (!modelContext?.registerTool) return;
-    const lifecycle = new AbortController();
-    const report = () => undefined;
-
-    void Promise.resolve(modelContext.registerTool({
-      name: "create_xiuxian_room",
-      title: "开辟修仙世界",
-      description: "以指定道号创建一个最多四人的修仙测试房间。",
-      inputSchema: {
-        type: "object",
-        properties: {
-          name: { type: "string", minLength: 2, maxLength: 16 },
-          pvpEnabled: { type: "boolean" },
-        },
-        required: ["name", "pvpEnabled"],
-        additionalProperties: false,
-      },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
-      async execute(input) {
-        const value = input as { name?: unknown; pvpEnabled?: unknown };
-        if (typeof value.name !== "string" || typeof value.pvpEnabled !== "boolean") {
-          throw new Error("需要提供道号和PVP设置。");
-        }
-        return createRoom(value.name, value.pvpEnabled);
-      },
-    }, { signal: lifecycle.signal })).catch(report);
-
-    void Promise.resolve(modelContext.registerTool({
-      name: "join_xiuxian_room",
-      title: "加入修仙世界",
-      description: "使用六位房间码和道号加入一个修仙测试房间。",
-      inputSchema: {
-        type: "object",
-        properties: {
-          name: { type: "string", minLength: 2, maxLength: 16 },
-          roomCode: { type: "string", minLength: 6, maxLength: 6 },
-        },
-        required: ["name", "roomCode"],
-        additionalProperties: false,
-      },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
-      async execute(input) {
-        const value = input as { name?: unknown; roomCode?: unknown };
-        if (typeof value.name !== "string" || typeof value.roomCode !== "string") {
-          throw new Error("需要提供道号和房间码。");
-        }
-        return joinRoom(value.name, value.roomCode);
-      },
-    }, { signal: lifecycle.signal })).catch(report);
-
-    return () => lifecycle.abort();
-  }, [createRoom, joinRoom]);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -562,33 +154,6 @@ export default function Home() {
     }
   }
 
-  async function copyInvite() {
-    if (!session) return;
-    const invite = `${window.location.origin}/?room=${session.code}`;
-    await navigator.clipboard.writeText(invite);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
-
-  const persistLife = useCallback((next: PrologueLife) => {
-    if (!session) return;
-    const normalized = normalizeLifeTimeline(next, prologueConfig.timeSystem);
-    localStorage.setItem(`${LIFE_KEY}:${session.playerId}`, JSON.stringify(normalized));
-    setLife(normalized);
-  }, [prologueConfig.timeSystem, session]);
-
-  const performRoomAction = useCallback(async (body: Record<string, unknown>) => {
-    if (!session) throw new Error("尚未进入世界。");
-    const response = await fetch(`/api/rooms/${session.code}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...body, playerId: session.playerId }),
-    });
-    const data = await readJson(response) as unknown as { room: Room; soulPower?: number; drained?: number };
-    if (data.room) setRoom(data.room);
-    return data;
-  }, [session]);
-
   const advanceWorldTime = useCallback((days: number) => {
     if (days <= 0) return;
     void performRoomAction({ action: "advance_time", days }).catch(() => {
@@ -596,35 +161,25 @@ export default function Home() {
     });
   }, [performRoomAction]);
 
-  const archiveCurrentLife = useCallback((current: PrologueLife) => {
-    if (!session) return false;
-    const entry: PastLifeArchiveEntry = {
-      id: `${session.playerId}-cycle-${current.cycle ?? 1}`,
-      archivedAt: new Date().toISOString(),
-      playerName: session.name,
-      roomCode: session.code,
-      life: current,
-    };
-    try {
-      const stored = localStorage.getItem(`${PAST_LIVES_KEY}:${session.playerId}`);
-      const previous = stored ? JSON.parse(stored) as PastLifeArchiveEntry[] : [];
-      if (previous.some((candidate) => candidate.id === entry.id)) {
-        localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
-        setPastLives(previous);
-        setLife(null);
-        return true;
-      }
-      const next = [...previous, entry];
-      localStorage.setItem(`${PAST_LIVES_KEY}:${session.playerId}`, JSON.stringify(next));
-      localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
-      setPastLives(next);
-      setLife(null);
-      return true;
-    } catch {
-      setItemNotice("本机存储空间不足，这一世尚未保存。");
-      return false;
-    }
-  }, [session]);
+  const {
+    itemActionSelection,
+    playerActionSelection,
+    eventNpcActionSelection,
+    freeActionContext,
+    performFreeAction,
+  } = useFreeActions({
+    session,
+    room,
+    life,
+    lifeExpired,
+    eventConfig,
+    freeActionConfig,
+    timeSystem: prologueConfig.timeSystem,
+    persistLife,
+    advanceWorldTime,
+    setActiveActionTarget,
+    setFreeActionNotice,
+  });
 
   useEffect(() => {
     if (!session || !life || life.deathState) return;
@@ -678,7 +233,7 @@ export default function Home() {
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [archiveCurrentLife, life, performRoomAction, persistLife, prologueConfig.timeSystem, reincarnationConfig, room, session]);
+  }, [archiveCurrentLife, life, performRoomAction, persistLife, prologueConfig.timeSystem, reincarnationConfig, room, session, setRoom]);
 
   function beginLife(inheritance?: LifeInheritance) {
     const cycle = room?.cycle ?? 1;
@@ -830,217 +385,6 @@ export default function Home() {
     setEventDiceRolling(false);
     setEventResolutionReady(true);
     persistLife(continueVillageAdventure(life, eventConfig, eventEngineConfig));
-  }
-
-  function itemActionSelection(item: NonNullable<PrologueLife["inventory"]>[number]): ActionSelection {
-    const tags = itemTags(item);
-    return {
-      key: `item:${item.id}`,
-      sourceItemId: item.id,
-      target: {
-        id: `item:${item.id}`,
-        name: item.name,
-        type: "item",
-        level: life?.level ?? 1,
-        baseDifficulty: Math.max(5, (life?.level ?? 1) + (item.consumable ? 2 : 6)),
-        state: "carried",
-        tags,
-        traits: {
-          complexity: tags.some((tag) => ["talisman", "weapon", "armor"].includes(tag)) ? 12 : 5,
-          toxicity: tags.includes("toxic") ? 35 : tags.includes("herb") ? 8 : 0,
-          durability: tags.includes("mineral") ? 35 : 10,
-          concealment: 5,
-        },
-      },
-    };
-  }
-
-  function playerActionSelection(player: Player): ActionSelection {
-    return {
-      key: `player:${player.id}`,
-      sourcePlayerId: player.id,
-      target: {
-        id: `player:${player.id}`,
-        name: player.name,
-        type: "npc",
-        level: Math.max(1, player.level),
-        baseDifficulty: 10,
-        relation: 0,
-        state: player.lifeStatus,
-        tags: ["neutral", "witness", ...(player.isHost ? ["important"] : [])],
-        traits: { concealment: 5, alertness: 10, willpower: 10, bargaining: 5, courage: 10, suspicion: 5 },
-      },
-    };
-  }
-
-  function eventNpcActionSelection(): ActionSelection | null {
-    if (!life) return null;
-    const event = currentRandomEvent(life, eventConfig);
-    const npc = event?.interactable;
-    if (!event || !npc) return null;
-    return {
-      key: `event:${event.id}:${npc.id}`,
-      target: {
-        ...npc,
-        state: life.freeActionTargetStates?.[npc.id] ?? npc.state,
-        stats: npc.stats ? { ...npc.stats } : undefined,
-        tags: [...npc.tags],
-        traits: npc.traits ? { ...npc.traits } : undefined,
-        overrides: npc.overrides ? { ...npc.overrides } : undefined,
-      },
-      recommendedActions: [...npc.recommendedActions],
-      extraActions: [...npc.extraActions],
-    };
-  }
-
-  function secondaryTargetFor(actionId: string, selection: ActionSelection): FreeActionTarget | undefined {
-    if (!life || !session || !room) return undefined;
-    if (actionId === "use_item") {
-      return { id: session.playerId, name: session.name, type: "self", level: life.level, stats: life.stats, tags: [], state: "alive" };
-    }
-    if (actionId === "combine_item") {
-      const otherItem = (life.inventory ?? []).find((item) => item.quantity > 0 && item.id !== selection.sourceItemId);
-      return otherItem ? itemActionSelection(otherItem).target : undefined;
-    }
-    if (actionId === "give_item") {
-      const otherPlayer = room.players.find((player) => player.id !== session.playerId && player.lifeStatus === "alive");
-      return otherPlayer ? playerActionSelection(otherPlayer).target : undefined;
-    }
-    return undefined;
-  }
-
-  function freeActionContext(selection: ActionSelection, actionId: string): FreeActionContext | null {
-    if (!life || life.deathState || lifeExpired || !session || !room) return null;
-    const attemptKey = `${selection.key}:${actionId}`;
-    const isHostilePvpAction = Boolean(selection.sourcePlayerId && HOSTILE_ACTIONS.has(actionId));
-    const activeEvent = currentRandomEvent(life, eventConfig);
-    return {
-      actor: freeActionActorFromLife(session.playerId, life),
-      target: selection.target,
-      secondaryTarget: secondaryTargetFor(actionId, selection),
-      world: {
-        seed: `${room.code}:${room.createdAt}`,
-        locationId: selection.key.startsWith("event:") && activeEvent ? activeEvent.id : "green-stone-village",
-        locationTags: ["settlement", ...(selection.key.startsWith("event:") ? activeEvent?.tags ?? [] : [])],
-        witnessCount: Math.max(0, room.players.filter((player) => player.lifeStatus === "alive").length - 2),
-      },
-      actionId,
-      attemptCount: life.freeActionAttempts?.[attemptKey] ?? 0,
-      override: isHostilePvpAction && !room.pvpEnabled
-        ? { available: false, unavailableReason: "房主未开启 PVP，不能对其他玩家采取敌对行动。" }
-        : undefined,
-    };
-  }
-
-  function performFreeAction(selection: ActionSelection, actionId: string) {
-    if (!life || life.deathState || lifeExpired || !session) return;
-    const context = freeActionContext(selection, actionId);
-    if (!context) return;
-    const preview = previewFreeAction(context, freeActionConfig);
-    if (!preview.available) {
-      setFreeActionNotice({ targetKey: selection.key, text: preview.reason, danger: true });
-      return;
-    }
-    if ((preview.requiresConfirmation || preview.lethalWarning) && !window.confirm(
-      `${preview.actionName}「${selection.target.name}」？\n风险：${preview.riskLabel}\n预计成功率：${preview.chanceRange[0]}–${preview.chanceRange[1]}%\n此行动可能产生不可逆后果。`,
-    )) return;
-
-    const attemptKey = `${selection.key}:${actionId}`;
-    const attemptNumber = life.freeActionAttempts?.[attemptKey] ?? 0;
-    const resolution = resolveFreeAction(
-      prepareFreeAction(context, `${session.playerId}:${attemptKey}:${attemptNumber}`),
-      freeActionConfig,
-    );
-    const succeeded = resolution.outcome === "success" || resolution.outcome === "criticalSuccess";
-    const sourceItem = selection.sourceItemId
-      ? life.inventory?.find((item) => item.id === selection.sourceItemId)
-      : undefined;
-    const sourceTags = sourceItem ? itemTags(sourceItem) : [];
-    const edible = sourceTags.some((tag) => ["food", "herb", "toxic"].includes(tag));
-    const consumeItem = Boolean(selection.sourceItemId && (
-      actionId === "discard_item"
-      || (succeeded && actionId === "destroy_item")
-      || (actionId === "eat_item" && edible)
-      || (succeeded && actionId === "use_item"
-        && life.inventory?.find((item) => item.id === selection.sourceItemId)?.consumable)
-    ));
-    const accumulatedMinutes = (life.freeActionWorldMinutes ?? 0) + resolution.costs.worldMinutes;
-    const elapsedDays = Math.floor(accumulatedMinutes / (24 * 60));
-    const ingestionDamage = actionId === "eat_item" && edible && !succeeded
-      ? Math.max(2, Math.ceil((sourceItem?.toxicity ?? 10) / (resolution.outcome === "criticalFailure" ? 4 : 8)))
-      : 0;
-    let nextLife: PrologueLife = {
-      ...life,
-      currentHealth: Math.max(1, life.currentHealth - resolution.costs.health - ingestionDamage),
-      currentSpirit: Math.max(0, life.currentSpirit - resolution.costs.spirit),
-      spiritStones: Math.max(0, (life.spiritStones ?? 0) - resolution.costs.spiritStones),
-      inventory: consumeItem
-        ? (life.inventory ?? []).map((item) => item.id === selection.sourceItemId
-          ? { ...item, quantity: Math.max(0, item.quantity - 1) }
-          : item)
-        : life.inventory,
-      freeActionAttempts: {
-        ...(life.freeActionAttempts ?? {}),
-        [attemptKey]: attemptNumber + 1,
-      },
-      freeActionWorldMinutes: accumulatedMinutes % (24 * 60),
-    };
-    for (const effect of resolution.effects) {
-      if (effect.type === "set_flag" && typeof effect.id === "string") {
-        const flagValue = typeof effect.value === "boolean" || typeof effect.value === "string" || typeof effect.value === "number"
-          ? effect.value
-          : true;
-        nextLife = {
-          ...nextLife,
-          freeActionFlags: {
-            ...(nextLife.freeActionFlags ?? {}),
-            [effect.id]: flagValue,
-          },
-          adventure: nextLife.adventure && typeof flagValue === "boolean"
-            ? { ...nextLife.adventure, flags: { ...nextLife.adventure.flags, [effect.id]: flagValue } }
-            : nextLife.adventure,
-        };
-      }
-      if (effect.type === "set_state" && typeof effect.value === "string") {
-        nextLife = {
-          ...nextLife,
-          freeActionTargetStates: {
-            ...(nextLife.freeActionTargetStates ?? {}),
-            [selection.target.id]: effect.value,
-          },
-        };
-      }
-      if (effect.type === "item" && typeof effect.id === "string") {
-        const definition = eventConfig.itemDefinitions[effect.id];
-        if (definition) {
-          const quantity = typeof effect.quantity === "number" ? Math.max(1, Math.round(effect.quantity)) : 1;
-          const inventory = [...(nextLife.inventory ?? [])];
-          const existingIndex = inventory.findIndex((item) => item.id === effect.id);
-          if (existingIndex >= 0) inventory[existingIndex] = { ...inventory[existingIndex], quantity: inventory[existingIndex].quantity + quantity };
-          else inventory.push({ ...definition, quantity, effects: definition.effects.map((itemEffect) => ({ ...itemEffect })) });
-          nextLife = { ...nextLife, inventory };
-        }
-      }
-    }
-    if (elapsedDays > 0) {
-      nextLife = spendLifeTime(nextLife, elapsedDays, "自由行动", prologueConfig.timeSystem);
-    }
-    persistLife(nextLife);
-    advanceWorldTime(elapsedDays);
-
-    const handoff = resolution.nextSystem === "combat"
-      ? resolution.combat?.lethal ? " 结果需要转入致死战斗。" : " 结果需要转入战斗。"
-      : resolution.nextSystem === "dialogue" ? " 结果需要进入交谈界面。"
-        : resolution.nextSystem === "trade" ? " 结果需要进入交易界面。" : "";
-    const timeText = resolution.costs.worldMinutes > 0 ? ` 耗时 ${resolution.costs.worldMinutes} 分钟。` : "";
-    setFreeActionNotice({
-      targetKey: selection.key,
-      text: `${FREE_ACTION_OUTCOME_LABELS[resolution.outcome]}（掷 ${resolution.roll}/${resolution.chance}）：${resolution.message}${ingestionDamage > 0 ? ` 药性有毒，气血 -${ingestionDamage}。` : ""}${handoff}${timeText}`,
-      danger: resolution.outcome === "failure" || resolution.outcome === "criticalFailure" || resolution.nextSystem === "combat",
-    });
-    if (consumeItem && (nextLife.inventory?.find((item) => item.id === selection.sourceItemId)?.quantity ?? 0) <= 0) {
-      setActiveActionTarget(null);
-    }
   }
 
   function renderFreeActionMenu(selection: ActionSelection) {
@@ -1246,26 +590,14 @@ export default function Home() {
     persistLife(completeCycleSecret(life));
   }
 
-  function resetAllLives() {
-    if (!session) return;
-    localStorage.removeItem(`${LIFE_KEY}:${session.playerId}`);
-    localStorage.removeItem(`${PAST_LIVES_KEY}:${session.playerId}`);
-    setPastLives([]);
-    setItemNotice("");
-    setLife(null);
-  }
-
   async function leaveRoom() {
     if (session) {
       await fetch(`/api/rooms/${session.code}?playerId=${encodeURIComponent(session.playerId)}`, {
         method: "DELETE",
       }).catch(() => undefined);
     }
-    localStorage.removeItem(SESSION_KEY);
-    setSession(null);
-    setRoom(null);
+    clearSession();
     setError("");
-    window.history.replaceState(null, "", window.location.pathname);
   }
 
   useEffect(() => {
@@ -1307,68 +639,17 @@ export default function Home() {
     return (
       <main className="world-grid min-h-screen px-3 py-3 sm:px-5 lg:h-screen lg:overflow-hidden lg:px-7">
         <div className="mx-auto max-w-[1480px]">
-          <header className="mb-3 flex flex-wrap items-center gap-3 border-b border-[#29443a] pb-3">
-            <div className="flex items-center gap-3">
-              <div className="seal grid h-9 w-9 place-items-center font-bold">{content.brand.seal}</div>
-              <div>
-                <p className="tracking-[0.2em] text-[#f0dfae]">{content.brand.name}</p>
-                <p className="hidden text-xs text-[#82968c] xl:block">{content.brand.subtitle}</p>
-              </div>
-            </div>
-
-            <div className="ml-auto flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-              <div className="min-w-[230px] rounded-md border border-[#365146] bg-[#0a1713]/90 px-3 py-2">
-                <div className="flex items-center justify-between gap-4 text-xs">
-                  <span className="text-[#81968b]">
-                    {content.world.calendarLabel}
-                    <strong className="ml-2 font-normal text-[#e8eee8]">
-                      {formatWorldDate(room.worldDay, prologueConfig.timeSystem.daysPerYear)}
-                    </strong>
-                  </span>
-                  <span className={lifeExpired ? "flex items-center gap-1 text-[#e99580]" : "flex items-center gap-1 text-[#d4bd78]"}>
-                    <Hourglass className="h-3.5 w-3.5" />
-                    {remainingLifeDays === null
-                      ? "阳寿未定"
-                      : remainingLifeDays <= 0
-                        ? "阳寿已尽"
-                        : `余 ${formatYearsAndDays(remainingLifeDays, prologueConfig.timeSystem.daysPerYear)}`}
-                  </span>
-                </div>
-                {remainingLifeDays !== null && (
-                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#2a2118]" title={`剩余阳寿 ${remainingLifeDays.toLocaleString("zh-CN")} 天`}>
-                    <div
-                      className={`h-full rounded-full ${lifeExpired ? "bg-[#b95f55]" : "bg-[#c3a45f]"}`}
-                      style={{ width: `${remainingLifePercent}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={copyInvite}
-                title={`${content.world.roomLabel} ${room.code}`}
-                className="h-9 border border-[#304a40] px-3 text-[#aabbb2] hover:bg-[#17352c] hover:text-white"
-              >
-                <Globe2 className="h-3.5 w-3.5" />
-                <span className="font-mono tracking-[0.18em] text-[#e7d49c]">{room.code}</span>
-                {copied
-                  ? <span className="text-[11px] text-[#86baa3]">{content.world.copiedShort}</span>
-                  : <Copy className="h-3.5 w-3.5" />}
-                <span className="sr-only">{content.world.inviteShort}</span>
-              </Button>
-              <span
-                title={content.world.pvpLabel}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs ${room.pvpEnabled ? "border-[#69443e] bg-[#241512] text-[#d99585]" : "border-[#315046] bg-[#0c1b16] text-[#84b7a0]"}`}
-              >
-                {room.pvpEnabled ? <Swords className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
-                PVP {room.pvpEnabled ? content.world.pvpEnabled : content.world.pvpDisabled}
-              </span>
-              <Button size="icon-sm" variant="outline" onClick={leaveRoom} title={content.world.leaveButton} aria-label={content.world.leaveButton} className="border-[#385248] bg-transparent text-[#bbc8c0] hover:bg-[#14241f] hover:text-white">
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </header>
+          <WorldHeader
+            content={content}
+            room={room}
+            daysPerYear={prologueConfig.timeSystem.daysPerYear}
+            remainingLifeDays={remainingLifeDays}
+            remainingLifePercent={remainingLifePercent}
+            lifeExpired={lifeExpired}
+            copied={copied}
+            onCopyInvite={() => void copyInvite()}
+            onLeave={() => void leaveRoom()}
+          />
 
           <div className="grid gap-4 lg:h-[calc(100vh-5.25rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.78fr)] lg:overflow-hidden">
             <section className="ink-panel min-h-[540px] rounded-lg border border-[#29443a] p-5 lg:min-h-0 lg:overflow-y-auto lg:[scrollbar-color:#3b584a_#08130f] lg:[scrollbar-width:thin]">
@@ -1639,432 +920,80 @@ export default function Home() {
             </section>
 
             <aside className="flex min-h-0 flex-col gap-3 lg:h-full lg:overflow-hidden">
-              <nav className="order-2 grid shrink-0 grid-cols-3 rounded-lg border border-[#29443a] bg-[#08130f] p-1" aria-label="角色信息切换">
-                <button
-                  type="button"
-                  aria-pressed={sidebarView === "character"}
-                  onClick={() => setSidebarView("character")}
-                  className={`rounded-md px-3 py-2 text-sm transition ${sidebarView === "character" ? "bg-[#19372d] text-[#f0dfae]" : "text-[#82968c] hover:bg-[#10251e] hover:text-[#c7d3cd]"}`}
-                >
-                  命格
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={sidebarView === "assets"}
-                  disabled={!life || !statAllocationReady || Boolean(life.deathState)}
-                  onClick={() => setSidebarView("assets")}
-                  className={`rounded-md px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${sidebarView === "assets" ? "bg-[#19372d] text-[#f0dfae]" : "text-[#82968c] hover:bg-[#10251e] hover:text-[#c7d3cd]"}`}
-                >
-                  行囊{life && statAllocationReady ? ` · ${inventoryItemCount}` : ""}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={sidebarView === "companions"}
-                  onClick={() => setSidebarView("companions")}
-                  className={`rounded-md px-3 py-2 text-sm transition ${sidebarView === "companions" ? "bg-[#19372d] text-[#f0dfae]" : "text-[#82968c] hover:bg-[#10251e] hover:text-[#c7d3cd]"}`}
-                >
-                  同伴 · {room.players.length}
-                </button>
-              </nav>
+              <SidebarNavigation
+                value={sidebarView}
+                life={life}
+                statAllocationReady={statAllocationReady}
+                inventoryItemCount={inventoryItemCount}
+                playerCount={room.players.length}
+                onChange={setSidebarView}
+              />
 
-              <section className={`${sidebarView === "character" ? "order-3 min-h-0 flex-1 overflow-y-auto" : "hidden"} ink-panel rounded-lg border border-[#29443a] p-4 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]`}>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg text-[#f0dfae]">{life && !statAllocationReady ? "入世进度" : "此世命格"}</h2>
-                  <span className="text-sm text-[#82968c]">{life && statAllocationReady ? `${life.realm} · ${life.level}级` : "尚未定命"}</span>
-                </div>
-                {life && statAllocationReady ? (
-                  <>
-                    <div className="mt-3 rounded border border-[#4a5036] bg-[#11170f] px-3 py-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-[#82968c]">{prologueConfig.character.rootSummaryLabel}</span>
-                        <strong className="text-sm font-normal text-[#e7d49c]">{life.root.name}</strong>
-                      </div>
-                      <p className="mt-1.5 text-xs text-[#8da096]" title={life.root.talentText}>
-                        {prologueConfig.character.talentSummaryLabel}「{life.root.talent}」
-                      </p>
-                    </div>
-                    <div className="mt-3 grid grid-cols-5 gap-2">
-                      {STAT_LABELS.map(({ key, label }) => (
-                        <div key={key} className="rounded border border-[#29443a] bg-[#091511] px-2 py-2 text-center">
-                          <p className="text-xs text-[#71847a]">{label}</p>
-                          <p className="mt-1 font-mono text-lg text-[#e7d49c]">{life.stats[key]}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-[#b6c4bc]"><Heart className="h-4 w-4 text-[#d8796a]" />气血</span>
-                          <span className="font-mono text-[#d8dfda]">{life.currentHealth} / {life.maxHealth}</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2823]">
-                          <div className="h-full rounded-full bg-[#b95f55]" style={{ width: `${Math.round((life.currentHealth / life.maxHealth) * 100)}%` }} />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-[#b6c4bc]"><Zap className="h-4 w-4 text-[#6e9fc0]" />灵力</span>
-                          <span className="font-mono text-[#d8dfda]">{life.currentSpirit} / {life.maxSpirit}</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2823]">
-                          <div className="h-full rounded-full bg-[#5f91b5]" style={{ width: `${Math.round((life.currentSpirit / life.maxSpirit) * 100)}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                    {life.statAllocationFinalized && (
-                      <p className="mt-3 text-xs leading-5 text-[#75887e]">
-                        {prologueConfig.character.allocationCompleteText}
-                      </p>
-                    )}
-                    {(life.deathMarks?.length ?? 0) > 0 && (
-                      <div className="mt-3 rounded border border-[#54405f] bg-[#160f1c] px-3 py-2">
-                        <p className="text-xs text-[#9b86a7]">死亡命格</p>
-                        {life.deathMarks?.map((mark) => (
-                          <p key={mark.id} className="mt-1 text-sm text-[#d6c0df]" title={mark.description}>「{mark.name}」</p>
-                        ))}
-                      </div>
-                    )}
-                    {life.inheritedMemory && (
-                      <div className="mt-3 rounded border border-[#4a5036] bg-[#11170f] px-3 py-2">
-                        <p className="text-xs text-[#82968c]">前世记忆</p>
-                        <p className="mt-1 text-sm text-[#e0ce91]" title={life.inheritedMemory.description}>「{life.inheritedMemory.name}」</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="mt-4 text-sm leading-6 text-[#71847a]">
-                    {life ? prologueConfig.character.earlySidebarText : "掷定此生命数后，从出身开始一步步完成入世。"}
-                  </p>
-                )}
-              </section>
+              <CharacterPanel
+                visible={sidebarView === "character"}
+                life={life}
+                statAllocationReady={statAllocationReady}
+                config={prologueConfig}
+              />
 
-              {sidebarView === "assets" && life && statAllocationReady && !life.deathState && (
-                <section className="order-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#29443a] p-4 ink-panel">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg text-[#f0dfae]">{prologueConfig.character.assetsTitle}</h2>
-                  <span className="rounded-full border border-[#5f5335] px-3 py-1 font-mono text-sm text-[#e3c873]">
-                    {prologueConfig.character.spiritStoneLabel} {life?.spiritStones ?? 0}
-                  </span>
-                </div>
-                {life ? (
-                  <Tabs defaultValue="inventory" className="mt-3 min-h-0 flex-1">
-                    <TabsList className="grid w-full grid-cols-3 bg-[#08130f]">
-                      <TabsTrigger value="inventory">{prologueConfig.character.inventoryTab}</TabsTrigger>
-                      <TabsTrigger value="cultivation">{prologueConfig.character.cultivationTab}</TabsTrigger>
-                      <TabsTrigger value="technique">{prologueConfig.character.techniqueTab}</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="inventory" className="mt-3 min-h-0 overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
-                      {(life.inventory ?? []).some((item) => item.quantity > 0) ? (
-                        <div className="space-y-3">
-                           {(life.inventory ?? []).filter((item) => item.quantity > 0).map((item) => {
-                             const actionSelection = itemActionSelection(item);
-                             const eventPreparing = Boolean(
-                              life.adventure?.currentEventId
-                                && !life.adventure.lastResolution
-                                && !life.adventure.stageComplete,
-                            );
-                            const selected = eventPreparing
-                              ? life.adventure?.selectedItemIds.includes(item.id) ?? false
-                              : life.selectedTrialItemIds?.includes(item.id) ?? false;
-                            const mayPrepare = eventPreparing
-                              || Boolean(!life.adventure && life.training && (!life.battle || life.battle.outcome === "defeat"));
-                            return (
-                               <div key={item.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                                 <div className="flex items-start justify-between gap-3">
-                                   <button
-                                     type="button"
-                                     className="min-w-0 flex-1 text-left"
-                                     aria-expanded={activeActionTarget === actionSelection.key}
-                                     onClick={() => {
-                                       setActiveActionTarget((current) => current === actionSelection.key ? null : actionSelection.key);
-                                       setFreeActionNotice(null);
-                                     }}
-                                   >
-                                     <p className="text-sm text-[#e6d8ad]">{item.name} × {item.quantity}</p>
-                                     <p className="mt-1 text-xs text-[#75887e]">{item.category} · {item.consumable ? "消耗品" : "持有物"}</p>
-                                     <p className="mt-2 text-sm leading-6 text-[#98a69f]">{item.description}</p>
-                                     <span className="mt-2 inline-flex items-center gap-1 text-xs text-[#b69a63]">
-                                       <MousePointer2 className="h-3 w-3" />点击选择行为
-                                     </span>
-                                   </button>
-                                  <div className="flex shrink-0 flex-col gap-2">
-                                    {itemTags(item).some((tag) => ["food", "herb", "toxic"].includes(tag)) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setActiveActionTarget(actionSelection.key);
-                                          performFreeAction(actionSelection, "eat_item");
-                                        }}
-                                        className="border-[#625539] bg-[#17150d] text-[#dfc77f] hover:bg-[#292313] hover:text-[#f2dfa5]"
-                                      >
-                                        食用
-                                      </Button>
-                                    )}
-                                    {mayPrepare && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => eventPreparing ? prepareEventItem(item.id) : prepareTrialItem(item.id)}
-                                        className={selected
-                                          ? "border-[#b99a56] bg-[#3b321c] text-[#f0d78f] hover:bg-[#4a3e22]"
-                                          : "border-[#3b584a] bg-transparent text-[#aebdb5] hover:bg-[#17352c] hover:text-white"}
-                                      >
-                                        {selected ? prologueConfig.character.selectedItem : prologueConfig.character.selectItem}
-                                      </Button>
-                                    )}
-                                  </div>
-                                 </div>
-                                 {renderFreeActionMenu(actionSelection)}
-                               </div>
-                            );
-                          })}
-                          <p className="text-xs leading-5 text-[#70837a]">
-                            {life.adventure
-                              ? "可为当前事件备好任意数量的道具；结算时仅消耗真正生效的消耗品。"
-                              : prologueConfig.character.itemUseHint}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
-                      )}
-                    </TabsContent>
-                    <TabsContent value="cultivation" className="mt-3 min-h-0 space-y-3 overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
-                      {(life.cultivationArts ?? []).length > 0 ? (life.cultivationArts ?? []).map((ability) => (
-                        <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm text-[#e6d8ad]">{ability.name}</p>
-                            <span className="text-xs text-[#b69a63]">{ability.grade}</span>
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-[#98a69f]">{ability.description}</p>
-                        </div>
-                      )) : <p className="text-sm text-[#71847a]">{prologueConfig.character.cultivationEmpty}</p>}
-                    </TabsContent>
-                    <TabsContent value="technique" className="mt-3 min-h-0 space-y-3 overflow-y-auto pr-1 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
-                      {(life.techniques ?? []).length > 0 ? (life.techniques ?? []).map((ability) => (
-                        <div key={ability.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm text-[#e6d8ad]">{ability.name}</p>
-                            <span className="text-xs text-[#b69a63]">{ability.grade}</span>
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-[#98a69f]">{ability.description}</p>
-                        </div>
-                      )) : <p className="text-sm text-[#71847a]">{prologueConfig.character.techniqueEmpty}</p>}
-                    </TabsContent>
-                  </Tabs>
-                ) : (
-                  <p className="mt-4 text-sm text-[#71847a]">{prologueConfig.character.inventoryEmpty}</p>
-                )}
-                </section>
-              )}
+              <InventoryPanel
+                visible={sidebarView === "assets" && Boolean(life && statAllocationReady && !life.deathState)}
+                life={life}
+                config={prologueConfig}
+                activeActionTarget={activeActionTarget}
+                itemActionSelection={itemActionSelection}
+                renderActionMenu={renderFreeActionMenu}
+                onToggleActionTarget={(key) => {
+                  setActiveActionTarget((current) => current === key ? null : key);
+                  setFreeActionNotice(null);
+                }}
+                onEatItem={(selection) => {
+                  setActiveActionTarget(selection.key);
+                  performFreeAction(selection, "eat_item");
+                }}
+                onPrepareEventItem={prepareEventItem}
+                onPrepareTrialItem={prepareTrialItem}
+              />
 
               {life && statAllocationReady && !life.deathState && (
-                <section className="order-1 shrink-0 overflow-y-auto rounded-lg border border-[#3f554b] p-4 ink-panel lg:max-h-[46%] [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="flex items-center gap-2 text-lg text-[#f0dfae]">
-                    <Swords className="h-5 w-5" />
-                    {life?.adventure ? "事件判定" : prologueConfig.trial.windowTitle}
-                  </h2>
-                  <span className="rounded-full border border-[#3d554a] px-2.5 py-1 text-xs text-[#82968c]">
-                    {life?.adventure
-                      ? eventDiceRolling
-                        ? "掷骰中"
-                        : life.adventure.lastResolution
-                          ? eventResolutionReady ? "判定完成" : "命数揭示中"
-                          : validPendingEventChoice
-                            ? "等待掷骰"
-                            : "等待选择"
-                      : trialDiceRolling
-                        ? "D10 转动中"
-                        : trialAwaitingRoll
-                          ? "等待 D10"
-                          : prologueConfig.trial.windowBadge}
-                  </span>
-                </div>
-                {life?.adventure ? (
-                  <EventJudgement
-                    resolution={life.adventure.lastResolution}
-                    pendingChoiceText={pendingEventChoiceText}
-                    rolling={eventDiceRolling}
-                    onRoll={() => void rollEventChoice()}
-                    onCancel={() => setPendingEventChoice(null)}
-                  />
-                ) : trialAwaitingRoll ? (
-                  <div className="mt-4 rounded-md border border-[#4b5239] bg-[#10170f] px-4 py-5 text-center">
-                    <p className="text-xs text-[#83958b]">木傀已立于阵中</p>
-                    <p className="mt-1 text-sm text-[#dfcf9e]">木傀四项判定较高，投出 1—10 点加入你的全部比较。</p>
-                    <button
-                      type="button"
-                      disabled={trialDiceRolling}
-                      onClick={() => void rollTrial()}
-                      className="group mx-auto mt-4 grid h-24 w-24 place-items-center rounded-2xl border border-[#806b3d] bg-[radial-gradient(circle_at_35%_25%,#3a321d,#16150e_65%)] text-[#efd27b] shadow-[0_0_28px_rgba(214,182,109,0.14)] transition hover:-translate-y-1 hover:border-[#c6a755] disabled:cursor-wait disabled:hover:translate-y-0"
-                      aria-label={trialDiceRolling ? "十面命数骰转动中" : "投掷十面命数骰"}
-                    >
-                      <Dices className={`h-10 w-10 ${trialDiceRolling ? "dice-cast" : "transition group-hover:rotate-12 group-hover:scale-110"}`} />
-                    </button>
-                    <p className="mt-3 text-sm text-[#b9aa7b]">{trialDiceRolling ? "命数翻转中……" : "点击投掷 D10"}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={trialDiceRolling}
-                      onClick={() => void rollTrial(1)}
-                      className="mt-1 text-xs text-[#8e786b] hover:bg-[#291b17] hover:text-[#dc9a85]"
-                    >
-                      TEST · 固定投出 1 点
-                    </Button>
-                  </div>
-                ) : life?.battle ? (
-                  <div className="mt-4">
-                    {life.battle.fateRoll !== undefined && (
-                      <div className="mb-3 flex items-center justify-between rounded border border-[#5b4e31] bg-[#17160e] px-3 py-2">
-                        <span className="text-sm text-[#a99b74]">十面命数骰</span>
-                        <span className="font-mono text-xl text-[#ecd58e]">D10 · {life.battle.fateRoll}</span>
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      {life.battle.comparisons.map((item) => (
-                        <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded border border-[#253b32] bg-[#08120f] px-3 py-2 text-sm">
-                          <span className="text-[#93a59b]">{item.label}</span>
-                          <span className={item.player >= item.enemy ? "text-[#8fc9aa]" : "text-[#d58b79]"}>
-                            {item.player} : {item.enemy} · {item.verdict}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {(life.battle.itemMessages ?? []).length > 0 && (
-                      <div className="mt-3 space-y-1 rounded border border-[#5b4e31] bg-[#1b170e] px-3 py-2">
-                        {life.battle.itemMessages?.map((message) => (
-                          <p key={message} className="text-xs leading-5 text-[#d9c081]">{message}</p>
-                        ))}
-                      </div>
-                    )}
-                    <div className={`mt-4 rounded-md border p-4 ${life.battle.outcome === "defeat" ? "border-[#73443b] bg-[#2a1714]" : "border-[#486a58] bg-[#10241c]"}`}>
-                      <p className="text-lg text-[#f1dfaa]">{life.battle.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-[#aebbb4]">{life.battle.summary}</p>
-                      <p className="mt-2 text-sm text-[#d4b875]">{life.battle.reward}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-md border border-dashed border-[#31483e] px-4 py-6 text-center">
-                    <p className="text-sm text-[#71847a]">{prologueConfig.trial.emptyTitle}</p>
-                    <p className="mt-2 text-xs leading-5 text-[#566b61]">{prologueConfig.trial.emptyText}</p>
-                  </div>
-                )}
-                </section>
+                <JudgementPanel
+                  life={life}
+                  config={prologueConfig}
+                  pendingChoiceText={pendingEventChoiceText}
+                  eventDiceRolling={eventDiceRolling}
+                  eventResolutionReady={eventResolutionReady}
+                  trialAwaitingRoll={trialAwaitingRoll}
+                  trialDiceRolling={trialDiceRolling}
+                  onRollEvent={() => void rollEventChoice()}
+                  onCancelEvent={() => setPendingEventChoice(null)}
+                  onRollTrial={(forcedRoll) => void rollTrial(forcedRoll)}
+                />
               )}
 
-              <section className={`${sidebarView === "companions" ? "order-3 min-h-0 flex-1 overflow-y-auto" : "hidden"} ink-panel rounded-lg border border-[#29443a] p-4 [scrollbar-color:#3b584a_#08130f] [scrollbar-width:thin]`}>
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="flex items-center gap-2 text-base text-[#f0dfae]">
-                    <Users className="h-4 w-4" />
-                    {content.world.playersTitle}
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-[#82968c]">{room.players.length} / 4</span>
-                    <Button onClick={copyInvite} size="icon-xs" variant="ghost" title={content.world.copyInvite} aria-label={content.world.copyInvite} className="text-[#b9a368] hover:bg-[#17352c] hover:text-white">
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {room.players.map((player) => {
-                    const isCurrentPlayer = player.id === session.playerId;
-                    const actionSelection = playerActionSelection(player);
-                    const canUseFreeActions = !isCurrentPlayer
-                      && player.lifeStatus === "alive"
-                      && ownPlayer?.lifeStatus === "alive"
-                      && Boolean(life && statAllocationReady && !life.deathState && !lifeExpired);
-                    return (
-                    <div key={player.id} className={`rounded-md border px-3 py-2 ${player.lifeStatus === "soul" ? "border-[#594565] bg-[#150f1b]" : "border-[#284138] bg-[#091511]"}`}>
-                      <button
-                        type="button"
-                        disabled={!canUseFreeActions}
-                        aria-expanded={canUseFreeActions && activeActionTarget === actionSelection.key}
-                        onClick={() => {
-                          setActiveActionTarget((current) => current === actionSelection.key ? null : actionSelection.key);
-                          setFreeActionNotice(null);
-                        }}
-                        className="flex w-full items-center gap-3 text-left disabled:cursor-default"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm text-[#e7ebe4]">{player.name}</p>
-                          <p className="text-xs text-[#74877e]">
-                            {player.lifeStatus === "soul"
-                              ? `残魂 · 魂力 ${player.soulPower}`
-                              : player.lifeStatus === "rebirth"
-                                ? "等待轮回"
-                                : `${player.realm ?? (player.isHost ? content.world.hostRole : content.world.playerRole)} · ${player.level}级`}
-                          </p>
-                        </div>
-                        {player.lifeStatus === "soul" && <Ghost className="h-4 w-4 text-[#a987ba]" />}
-                        {isCurrentPlayer
-                          ? <span className="text-xs text-[#d6b66d]">{content.world.currentPlayer}</span>
-                          : canUseFreeActions && <span className="flex items-center gap-1 text-xs text-[#b69a63]"><MousePointer2 className="h-3 w-3" />行为</span>}
-                      </button>
-                      {canUseFreeActions && renderFreeActionMenu(actionSelection)}
-                      {player.lifeStatus === "soul" && ownPlayer?.lifeStatus === "alive" && player.id !== session.playerId && life && !life.deathState && (
-                        <details className="mt-2 border-t border-[#493852] pt-2">
-                          <summary className="cursor-pointer text-xs text-[#c2a8cf]">{reincarnationConfig.revival.title}</summary>
-                          <p className="mt-2 text-xs leading-5 text-[#7f7485]">{reincarnationConfig.revival.summary}</p>
-                          <div className="mt-2 grid gap-2">
-                            {reincarnationConfig.revival.methods.filter((method) => !method.selfOnly).map((method) => {
-                              const cost = method.actorCost ?? {};
-                              const costText = cost.spiritStones
-                                ? `${cost.spiritStones} 灵石`
-                                : cost.spirit
-                                  ? `${cost.spirit} 灵力`
-                                  : cost.itemId
-                                    ? `道具 ×${cost.itemQuantity ?? 1}`
-                                    : "无消耗";
-                              return (
-                                <Button
-                                  key={method.id}
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={lifeActionBusy || !canPayRevival(method)}
-                                  onClick={() => void revivePlayer(player.id, method)}
-                                  className="justify-between border-[#594565] bg-transparent text-[#ccb8d5] hover:bg-[#24182b] hover:text-white"
-                                  title={method.description}
-                                >
-                                  <span>{method.title}</span><span className="text-[11px] opacity-70">{costText}</span>
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      )}
-                    </div>
-                    );
-                  })}
-                </div>
-                {error && <p className="mt-3 text-sm text-[#e99580]">{error}</p>}
-                {life && statAllocationReady && (
-                  <details className="mt-4 rounded border border-[#29443a] bg-[#08130f] px-3 py-2.5">
-                    <summary className="cursor-pointer text-sm text-[#b9aa7d]">世界与复活规则</summary>
-                    <div className="mt-3 border-t border-[#29443a] pt-3">
-                      <p className="text-sm text-[#d9c98f]">{reincarnationConfig.death.title}</p>
-                      <p className="mt-2 text-xs leading-5 text-[#7f9288]">{reincarnationConfig.death.summary}</p>
-                    </div>
-                    <div className="mt-4">
-                      <p className="text-sm text-[#d9c98f]">{prologueConfig.worldRules.multiplayerTitle}</p>
-                      <div className="mt-2 space-y-2">
-                        {prologueConfig.worldRules.raids.map((raid) => (
-                          <div key={raid.id} className="rounded border border-[#2b4439] bg-[#08130f] p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-sm text-[#dce4dc]">{raid.name}</p>
-                              <span className="text-xs text-[#b99a60]">{raid.status}</span>
-                            </div>
-                            <p className="mt-1 text-xs leading-5 text-[#768a80]">{raid.description}</p>
-                            <p className="mt-2 text-xs text-[#60746a]">
-                              {raid.minimumPlayers}–{raid.maximumPlayers} 人 · {raid.unlockRealm}解锁
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </details>
-                )}
-              </section>
+              <CompanionsPanel
+                visible={sidebarView === "companions"}
+                room={room}
+                session={session}
+                content={content}
+                life={life}
+                ownPlayer={ownPlayer}
+                statAllocationReady={statAllocationReady}
+                lifeExpired={lifeExpired}
+                activeActionTarget={activeActionTarget}
+                error={error}
+                lifeActionBusy={lifeActionBusy}
+                reincarnationConfig={reincarnationConfig}
+                prologueConfig={prologueConfig}
+                playerActionSelection={playerActionSelection}
+                renderActionMenu={renderFreeActionMenu}
+                onToggleActionTarget={(key) => {
+                  setActiveActionTarget((current) => current === key ? null : key);
+                  setFreeActionNotice(null);
+                }}
+                canPayRevival={canPayRevival}
+                onRevivePlayer={(playerId, method) => void revivePlayer(playerId, method)}
+                onCopyInvite={copyInvite}
+              />
             </aside>
           </div>
         </div>
@@ -2073,122 +1002,18 @@ export default function Home() {
   }
 
   return (
-    <main className="world-grid min-h-screen px-4 py-6 sm:px-7 lg:px-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex items-center justify-between border-b border-[#29443a] pb-4">
-          <div className="flex items-center gap-3">
-            <div className="seal grid h-10 w-10 place-items-center text-lg font-bold">{content.brand.seal}</div>
-            <div>
-              <p className="text-lg tracking-[0.22em] text-[#f0dfae]">{content.brand.name}</p>
-              <p className="text-sm text-[#82968c]">{content.brand.subtitle}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-[#8aa296]">
-            <span className="slow-pulse h-2 w-2 rounded-full bg-[#71b395]" />
-            {content.brand.serviceStatus}
-          </div>
-        </header>
-
-        <div className="grid min-h-[calc(100vh-105px)] items-center gap-10 py-10 lg:grid-cols-[1.05fr_0.95fr]">
-          <section>
-            <p className="mb-4 flex items-center gap-2 text-sm tracking-[0.24em] text-[#7fa08f]">
-              <Globe2 className="h-4 w-4" />
-              {content.landing.eyebrow}
-            </p>
-            <h1 className="max-w-2xl text-4xl leading-tight text-[#f4e8c5] sm:text-6xl">
-              {content.landing.titleLead}
-              <span className="block text-[#d6b66d]">{content.landing.titleAccent}</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#9fb0a7]">
-              {content.landing.description}
-            </p>
-            <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
-              {content.landing.highlights.map(({ value, label }) => (
-                <div key={value} className="border-l border-[#496355] pl-4">
-                  <p className="text-xl text-[#e7d49c]">{value}</p>
-                  <p className="mt-1 text-sm text-[#74877e]">{label}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="ink-panel rounded-lg border border-[#355046] p-5 sm:p-7">
-            <Tabs defaultValue={roomCode ? "join" : "create"}>
-              <TabsList className="grid w-full grid-cols-2 bg-[#08130f]">
-                <TabsTrigger value="create">{content.landing.createTab}</TabsTrigger>
-                <TabsTrigger value="join">{content.landing.joinTab}</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="create" className="mt-6">
-                <form onSubmit={handleCreate} className="space-y-5">
-                  <div>
-                    <label htmlFor="create-name" className="mb-2 block text-sm text-[#9caf9f]">{content.landing.nameLabel}</label>
-                    <Input
-                      id="create-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder={content.landing.createNamePlaceholder}
-                      minLength={2}
-                      maxLength={16}
-                      required
-                      className="h-12 border-[#395348] bg-[#07100e] text-base"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-[#2d483d] bg-[#091511] p-4">
-                    <div>
-                      <label htmlFor="pvp-switch" className="text-[#e2e8df]">{content.landing.pvpLabel}</label>
-                      <p className="mt-1 text-sm text-[#74877e]">{content.landing.pvpDescription}</p>
-                    </div>
-                    <Switch id="pvp-switch" checked={pvpEnabled} onCheckedChange={setPvpEnabled} />
-                  </div>
-                  <Button type="submit" disabled={busy} className="h-12 w-full bg-[#d6b66d] text-base text-[#102019] hover:bg-[#e7cc8b]">
-                    <Sparkles className="h-4 w-4" />
-                    {busy ? content.landing.createBusy : content.landing.createButton}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="join" className="mt-6">
-                <form onSubmit={handleJoin} className="space-y-5">
-                  <div>
-                    <label htmlFor="join-name" className="mb-2 block text-sm text-[#9caf9f]">{content.landing.nameLabel}</label>
-                    <Input
-                      id="join-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder={content.landing.joinNamePlaceholder}
-                      minLength={2}
-                      maxLength={16}
-                      required
-                      className="h-12 border-[#395348] bg-[#07100e] text-base"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="room-code" className="mb-2 block text-sm text-[#9caf9f]">{content.landing.roomCodeLabel}</label>
-                    <Input
-                      id="room-code"
-                      value={roomCode}
-                      onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 6))}
-                      placeholder={content.landing.roomCodePlaceholder}
-                      minLength={6}
-                      maxLength={6}
-                      required
-                      className="h-12 border-[#395348] bg-[#07100e] font-mono text-lg tracking-[0.22em]"
-                    />
-                  </div>
-                  <Button type="submit" disabled={busy} className="h-12 w-full bg-[#d6b66d] text-base text-[#102019] hover:bg-[#e7cc8b]">
-                    <Users className="h-4 w-4" />
-                    {busy ? content.landing.joinBusy : content.landing.joinButton}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-
-            {error && <p role="alert" className="mt-4 rounded-md border border-[#743f36] bg-[#351b18] px-4 py-3 text-sm text-[#f0a08d]">{error}</p>}
-            <p className="mt-5 text-center text-sm leading-6 text-[#6f8278]">{content.landing.privacyNotice}</p>
-          </section>
-        </div>
-      </div>
-    </main>
+    <LandingScreen
+      content={content}
+      name={name}
+      roomCode={roomCode}
+      pvpEnabled={pvpEnabled}
+      busy={busy}
+      error={error}
+      onNameChange={setName}
+      onRoomCodeChange={setRoomCode}
+      onPvpChange={setPvpEnabled}
+      onCreate={handleCreate}
+      onJoin={handleJoin}
+    />
   );
 }

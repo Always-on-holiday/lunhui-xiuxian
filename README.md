@@ -62,12 +62,18 @@
 ## 主要目录
 
 - `app/`：网页和服务器功能
+- `components/game/`：按界面职责拆分的游戏面板
+- `hooks/`：联机、本地存档、内容读取和自由行动流程
+- `lib/client/`：浏览器端共用类型与轻量工具
 - `db/`：数据库访问与结构
 - `drizzle/`：数据库迁移
-- `scripts/`：本地运行和联机启动脚本
+- `scripts/launcher/`：拆分后的 Windows 启动器模块
+- `scripts/tests/`：启动器与运行环境回归测试
 - `public/`：静态资源
 - `public/游戏内容/`：无需修改网页代码的文字配置
 - `public/游戏内容/轮回规则.json`：残魂、复活、继承和二周目特殊剧情
+
+开发时的文件职责和修改边界见 [代码结构说明](docs/ARCHITECTURE.md)。
 
 ## 授权与使用限制
 
